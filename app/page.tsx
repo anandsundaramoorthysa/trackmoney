@@ -1,0 +1,148 @@
+import { and, desc, eq, gte, lt } from "drizzle-orm";
+
+import { AgentPanel } from "@/components/AgentPanel";
+import { ResetDemoButton } from "@/components/ResetDemoButton";
+import { SetupNotice } from "@/components/SetupNotice";
+import { db } from "@/lib/db";
+import { transactions } from "@/lib/db/schema";
+import { getDemoUser } from "@/lib/demo";
+import { computeUsageFacts } from "@/lib/facts";
+import { formatPaise } from "@/lib/money";
+import { istMonthRange } from "@/lib/time";
+
+export const dynamic = "force-dynamic";
+
+export default async function DashboardPage() {
+  try {
+    const user = await getDemoUser();
+    const facts = await computeUsageFacts(user);
+    const month = istMonthRange();
+
+    const rows = await db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.userId, user.id),
+          gte(transactions.occurredOn, month.start),
+          lt(transactions.occurredOn, month.endExclusive),
+        ),
+      )
+      .orderBy(desc(transactions.occurredOn));
+
+    const spent = rows.reduce((sum, r) => sum + r.amountPaise, 0);
+
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-[-0.02em]">
+              {facts.userName}
+            </h1>
+            <p className="text-sm text-muted">
+              {month.label} · {user.plan === "pro" ? "Pro" : "Free"} plan
+            </p>
+          </div>
+          <ResetDemoButton />
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr]">
+          <div className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Stat
+                label="Transactions"
+                value={`${facts.txnCountThisMonth}`}
+                sub={
+                  user.plan === "pro"
+                    ? "no cap on Pro"
+                    : `of ${facts.freeTxnCap} on Free`
+                }
+                tone={user.plan === "free" && facts.isOverCap ? "bad" : "plain"}
+              />
+              <Stat label="Spent" value={formatPaise(spent)} sub="this month" />
+              <Stat
+                label="Recurring"
+                value={`${facts.recurringCount}`}
+                sub={
+                  user.plan === "pro"
+                    ? "detected automatically"
+                    : "not detected on Free"
+                }
+                tone={user.plan === "free" && facts.recurringCount > 0 ? "agent" : "plain"}
+              />
+            </div>
+
+            {user.plan === "free" && facts.isOverCap && (
+              <p className="rounded-lg border border-line bg-agent-tint px-4 py-3 text-sm">
+                This account is {facts.overCapBy} transactions over the Free cap
+                of {facts.freeTxnCap} for {month.label}.
+              </p>
+            )}
+
+            <section className="overflow-hidden rounded-xl border border-line bg-surface">
+              <h2 className="border-b border-line px-4 py-3 text-sm font-semibold">
+                Transactions · {month.label}
+              </h2>
+              <div className="max-h-[420px] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-surface text-left text-xs uppercase tracking-wide text-muted">
+                    <tr className="border-b border-line">
+                      <th className="px-4 py-2 font-medium">Date</th>
+                      <th className="px-4 py-2 font-medium">Merchant</th>
+                      <th className="px-4 py-2 font-medium">Category</th>
+                      <th className="px-4 py-2 text-right font-medium">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr key={row.id} className="border-b border-line/60 last:border-0">
+                        <td className="px-4 py-2 font-mono text-xs text-muted tabular">
+                          {row.occurredOn}
+                        </td>
+                        <td className="px-4 py-2">{row.merchant}</td>
+                        <td className="px-4 py-2 text-muted">{row.category}</td>
+                        <td className="px-4 py-2 text-right font-mono tabular">
+                          {formatPaise(row.amountPaise)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <AgentPanel
+            profile={{ name: user.name, email: user.email }}
+            plan={user.plan}
+          />
+        </div>
+      </div>
+    );
+  } catch (error) {
+    return <SetupNotice error={error} />;
+  }
+}
+
+function Stat({
+  label,
+  value,
+  sub,
+  tone = "plain",
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  tone?: "plain" | "bad" | "agent";
+}) {
+  const valueClass =
+    tone === "bad" ? "text-bad" : tone === "agent" ? "text-agent" : "text-ink";
+
+  return (
+    <div className="rounded-xl border border-line bg-surface px-4 py-3">
+      <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
+      <p className={`mt-1 font-mono text-2xl tabular ${valueClass}`}>{value}</p>
+      <p className="text-xs text-muted">{sub}</p>
+    </div>
+  );
+}
