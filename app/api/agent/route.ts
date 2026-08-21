@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { handleRouteError } from "@/lib/api-errors";
 import { listConversationEvents } from "@/lib/audit";
 import { getOrCreateConversation } from "@/lib/agent/conversation";
 import { runAgentTurn } from "@/lib/agent/run";
@@ -16,7 +17,7 @@ const CHAT_TYPES = new Set([
 ]);
 
 /** Returns the conversation as the audit trail already recorded it. */
-export async function GET() {
+async function handleGET() {
   const user = await getDemoUser();
   const conversation = await getOrCreateConversation(user.id);
   const events = await listConversationEvents(conversation.id);
@@ -37,7 +38,7 @@ export async function GET() {
   });
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   const user = await getDemoUser();
 
   let body: { kind?: string; message?: string };
@@ -72,4 +73,20 @@ export async function POST(request: Request) {
 
   const result = await runAgentTurn({ user, message });
   return NextResponse.json(result);
+}
+
+export async function GET() {
+  try {
+    return await handleGET();
+  } catch (error) {
+    return handleRouteError(error);
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    return await handlePOST(request);
+  } catch (error) {
+    return handleRouteError(error);
+  }
 }

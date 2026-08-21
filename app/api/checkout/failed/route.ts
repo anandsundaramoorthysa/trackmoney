@@ -1,6 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
+import { handleRouteError } from "@/lib/api-errors";
 import { db } from "@/lib/db";
 import { conversations } from "@/lib/db/schema";
 import { getDemoUser } from "@/lib/demo";
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
  * leave the account on Free. Nothing retries on its own, and the failure is as
  * visible in the audit trail as a success would be.
  */
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   const user = await getDemoUser();
 
   let body: { orderId?: string; paymentId?: string; reason?: string };
@@ -47,4 +48,12 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({ recorded: true });
+}
+
+export async function POST(request: Request) {
+  try {
+    return await handlePOST(request);
+  } catch (error) {
+    return handleRouteError(error);
+  }
 }

@@ -64,7 +64,21 @@ export function AgentPanel({
     (async () => {
       setBusy(true);
       try {
-        const history = await fetch("/api/agent").then((r) => r.json());
+        const response = await fetch("/api/agent");
+        if (!response.ok) {
+          const problem = await response.json().catch(() => ({}));
+          push({
+            id: "setup",
+            role: "agent",
+            text:
+              problem.setupRequired && problem.error
+                ? `I am not set up yet — ${problem.error}`
+                : "I could not reach my backend just now. The Billing page still works on its own.",
+          });
+          return;
+        }
+
+        const history = await response.json();
         if (Array.isArray(history.messages) && history.messages.length > 0) {
           setMessages(
             history.messages.map((m: { id: string; role: Message["role"]; text: string }) => ({

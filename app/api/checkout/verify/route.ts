@@ -1,6 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
+import { handleRouteError } from "@/lib/api-errors";
 import { db } from "@/lib/db";
 import { conversations } from "@/lib/db/schema";
 import { getDemoUser } from "@/lib/demo";
@@ -21,7 +22,7 @@ export const dynamic = "force-dynamic";
  * key secret, recomputed here. A failed verification is recorded as a failed
  * payment, not swallowed.
  */
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   const user = await getDemoUser();
 
   let body: {
@@ -86,4 +87,12 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ verified: true, plan: "pro", amountPaise });
+}
+
+export async function POST(request: Request) {
+  try {
+    return await handlePOST(request);
+  } catch (error) {
+    return handleRouteError(error);
+  }
 }

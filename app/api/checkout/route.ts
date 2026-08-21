@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { handleRouteError } from "@/lib/api-errors";
 import { getDemoUser } from "@/lib/demo";
 import { createProUpgradeOrder } from "@/lib/razorpay";
 
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
  *
  * It also takes no userId — the account comes from server context.
  */
-export async function POST() {
+async function handlePOST() {
   const user = await getDemoUser();
 
   const result = await createProUpgradeOrder(user, {
@@ -40,4 +41,12 @@ export async function POST() {
     userName: user.name,
     userEmail: user.email,
   });
+}
+
+export async function POST() {
+  try {
+    return await handlePOST();
+  } catch (error) {
+    return handleRouteError(error);
+  }
 }

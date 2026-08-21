@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { handleRouteError } from "@/lib/api-errors";
 import { seedDatabase } from "@/lib/db/seed";
 
 export const runtime = "nodejs";
@@ -13,7 +14,15 @@ export const dynamic = "force-dynamic";
  * be replayed cleanly in front of a panel without touching the database by
  * hand.
  */
-export async function POST() {
+async function handlePOST() {
   const summary = await seedDatabase();
   return NextResponse.json({ reset: true, ...summary });
+}
+
+export async function POST() {
+  try {
+    return await handlePOST();
+  } catch (error) {
+    return handleRouteError(error);
+  }
 }
