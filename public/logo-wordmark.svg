@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="48" viewBox="0 0 260 48" fill="none">
+  <rect width="48" height="48" rx="12" fill="#0E7C7B"/>
+  <path d="M11 32.5 L20 24 L27 29 L37.5 16" stroke="#FFFFFF" stroke-width="3.25" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
+  <circle cx="27" cy="29" r="4.25" fill="#E8A33D" stroke="#0E7C7B" stroke-width="1.5"/>
+  <text x="62" y="32" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="25" font-weight="600" letter-spacing="-0.5">
+    <tspan fill="#0A1918">Track</tspan><tspan fill="#0E7C7B">Money</tspan>
+  </text>
+</svg>

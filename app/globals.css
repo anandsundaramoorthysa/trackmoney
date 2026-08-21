@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+/*
+ * TrackMoney brand tokens — PLAN.md §7.2.
+ *
+ * Deep teal primary, warm amber accent. Amber is reserved for agent activity:
+ * anywhere the interface turns amber, the agent did something. That mapping is
+ * load-bearing, not decorative — it is what makes the audit trail readable at a
+ * glance.
+ */
+
+:root {
+  --tm-bg: #f6f8f8;
+  --tm-surface: #ffffff;
+  --tm-border: #dfe7e6;
+  --tm-text: #0a1918;
+  --tm-muted: #5a6c6b;
+  --tm-primary: #0e7c7b;
+  --tm-primary-strong: #0a5f5e;
+  --tm-primary-tint: #e6f2f2;
+  --tm-accent: #b26b00;
+  --tm-accent-tint: #fbf1e0;
+  --tm-success: #16794c;
+  --tm-danger: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --tm-bg: #081412;
+    --tm-surface: #0f2422;
+    --tm-border: #1d3a37;
+    --tm-text: #e7f1f0;
+    --tm-muted: #8fa5a3;
+    --tm-primary: #2fa8a5;
+    --tm-primary-strong: #4fc4c1;
+    --tm-primary-tint: #12332f;
+    --tm-accent: #f0b45e;
+    --tm-accent-tint: #2a2113;
+    --tm-success: #3fbf86;
+    --tm-danger: #f0857c;
+  }
+}
+
+@theme inline {
+  --color-canvas: var(--tm-bg);
+  --color-surface: var(--tm-surface);
+  --color-line: var(--tm-border);
+  --color-ink: var(--tm-text);
+  --color-muted: var(--tm-muted);
+  --color-brand: var(--tm-primary);
+  --color-brand-strong: var(--tm-primary-strong);
+  --color-brand-tint: var(--tm-primary-tint);
+  --color-agent: var(--tm-accent);
+  --color-agent-tint: var(--tm-accent-tint);
+  --color-ok: var(--tm-success);
+  --color-bad: var(--tm-danger);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "SFMono-Regular", monospace;
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  background: var(--tm-bg);
+  color: var(--tm-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Money and timestamps are tabular so columns line up down a ledger. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--tm-primary-tint);
+  color: var(--tm-text);
+}
