@@ -137,7 +137,6 @@ npm run dev                  # http://localhost:3000
 | `DATABASE_URL` | Neon connection string |
 | `RAZORPAY_KEY_ID` | Must start with `rzp_test_`; the app refuses live keys |
 | `RAZORPAY_KEY_SECRET` | |
-| `NEXT_PUBLIC_RAZORPAY_KEY_ID` | Same value as `RAZORPAY_KEY_ID` |
 | `GROQ_API_KEY` | Optional |
 | `GEMINI_API_KEY` | Optional |
 
