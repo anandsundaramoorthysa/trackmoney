@@ -49,13 +49,10 @@ export default async function BillingPage() {
             current={user.plan === "pro"}
             highlight
             action={
-              user.plan === "free" ? (
-                <UpgradeButton
-                  profile={{ name: user.name, email: user.email }}
-                />
-              ) : (
-                <p className="text-sm text-ok">You are on Pro.</p>
-              )
+              <UpgradeButton
+                profile={{ name: user.name, email: user.email }}
+                plan={user.plan}
+              />
             }
           />
         </div>

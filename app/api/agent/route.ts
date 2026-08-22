@@ -16,6 +16,25 @@ const CHAT_TYPES = new Set([
   "checkout_result",
 ]);
 
+type ChatEvent = {
+  id: string;
+  type: string;
+  explanation: string;
+  createdAt: Date;
+};
+
+function toChatMessages(events: ChatEvent[]) {
+  return events
+    .filter((e) => CHAT_TYPES.has(e.type))
+    .map((e) => ({
+      id: e.id,
+      role: e.type === "user_reply" ? "user" : "agent",
+      type: e.type,
+      text: e.explanation,
+      at: e.createdAt,
+    }));
+}
+
 /** Returns the conversation as the audit trail already recorded it. */
 async function handleGET() {
   const user = await getDemoUser();
@@ -26,15 +45,7 @@ async function handleGET() {
     conversationId: conversation.id,
     state: conversation.state,
     plan: user.plan,
-    messages: events
-      .filter((e) => CHAT_TYPES.has(e.type))
-      .map((e) => ({
-        id: e.id,
-        role: e.type === "user_reply" ? "user" : "agent",
-        type: e.type,
-        text: e.explanation,
-        at: e.createdAt,
-      })),
+    messages: toChatMessages(events),
   });
 }
 
@@ -53,9 +64,20 @@ async function handlePOST(request: Request) {
   if (body.kind === "start") {
     const conversation = await getOrCreateConversation(user.id);
     const existing = await listConversationEvents(conversation.id);
+
+    // The conversation already has history — another tab opened it, or a write
+    // landed between this client's history fetch and this call. Hand back what
+    // is on the record rather than a bare "skipped", which left the panel
+    // permanently blank for whichever client lost the race.
     if (existing.length > 0) {
-      return NextResponse.json({ skipped: true, reason: "already_started" });
+      return NextResponse.json({
+        skipped: true,
+        reason: "already_started",
+        conversationId: conversation.id,
+        messages: toChatMessages(existing),
+      });
     }
+
     const result = await runAgentTurn({ user, message: null });
     return NextResponse.json(result);
   }

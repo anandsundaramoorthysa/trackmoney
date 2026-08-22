@@ -12,8 +12,12 @@ type Message = {
   pending?: boolean;
 };
 
+type HistoryMessage = { id: string; role: Message["role"]; text: string };
+
 type TurnResponse = {
   reply: string;
+  skipped?: boolean;
+  messages?: HistoryMessage[];
   provider: string;
   checkout: (CheckoutOrder & { reused: boolean }) | null;
   toolRequested: string;
@@ -81,7 +85,7 @@ export function AgentPanel({
         const history = await response.json();
         if (Array.isArray(history.messages) && history.messages.length > 0) {
           setMessages(
-            history.messages.map((m: { id: string; role: Message["role"]; text: string }) => ({
+            history.messages.map((m: HistoryMessage) => ({
               id: m.id,
               role: m.role,
               text: m.text,
@@ -95,6 +99,16 @@ export function AgentPanel({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ kind: "start" }),
         }).then((r) => r.json());
+
+        // Another client had already opened the conversation between our
+        // history fetch and this call, so render what came back rather than
+        // sitting blank.
+        if (turn.skipped && Array.isArray(turn.messages)) {
+          setMessages(
+            turn.messages.map((m) => ({ id: m.id, role: m.role, text: m.text })),
+          );
+          return;
+        }
 
         if (turn.reply) {
           push({ id: `start-${Date.now()}`, role: "agent", text: turn.reply });
@@ -174,7 +188,10 @@ export function AgentPanel({
   }
 
   return (
-    <section className="flex h-[560px] flex-col overflow-hidden rounded-xl border border-line bg-surface">
+    <section
+      aria-label="TrackMoney assistant"
+      className="flex h-[560px] flex-col overflow-hidden rounded-xl border border-line bg-surface"
+    >
       <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-agent" aria-hidden />

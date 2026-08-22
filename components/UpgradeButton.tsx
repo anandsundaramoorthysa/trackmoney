@@ -19,9 +19,11 @@ import { openCheckout } from "@/lib/checkout-client";
  */
 export function UpgradeButton({
   profile,
+  plan,
   disabled,
 }: {
   profile: { name: string; email: string };
+  plan: "free" | "pro";
   disabled?: boolean;
 }) {
   const router = useRouter();
@@ -67,16 +69,24 @@ export function UpgradeButton({
     }
   }
 
+  // This component owns the outcome message, so it must stay mounted across the
+  // refresh that flips the account to Pro. Rendering the "already on Pro" state
+  // here rather than swapping the whole component out is what stops a
+  // successful payment's confirmation from vanishing the instant it succeeds.
   return (
     <div className="space-y-2">
-      <button
-        type="button"
-        onClick={handleClick}
-        disabled={busy || disabled}
-        className="rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {busy ? "Opening checkout…" : "Upgrade to Pro"}
-      </button>
+      {plan === "pro" ? (
+        <p className="text-sm text-ok">You are on Pro.</p>
+      ) : (
+        <button
+          type="button"
+          onClick={handleClick}
+          disabled={busy || disabled}
+          className="rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busy ? "Opening checkout…" : "Upgrade to Pro"}
+        </button>
+      )}
       {status && (
         <p
           className={`text-sm ${

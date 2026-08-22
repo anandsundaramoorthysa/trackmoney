@@ -15,7 +15,8 @@
     "db:seed": "tsx scripts/seed.ts",
     "test:facts": "tsx scripts/test-facts.ts",
     "test:integration": "tsx tests/integration.ts",
-    "test": "npm run test:facts && npm run test:integration"
+    "test": "npm run test:facts && npm run test:integration && npm run test:e2e",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
@@ -27,6 +28,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/pg": "^8.23.1",
