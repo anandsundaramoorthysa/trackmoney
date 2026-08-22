@@ -80,6 +80,17 @@ const QUESTION_WORDS = [
   /\btell me\b/,
 ];
 
+/**
+ * "no" as a determiner, not a refusal.
+ *
+ * "no problem, go ahead" is a yes. Matching the bare token meant the most
+ * enthusiastic possible consent was recorded as a permanent decline, which is
+ * the one thing this classifier must never infer. These are removed before the
+ * refusal test runs.
+ */
+const NOT_A_REFUSAL =
+  /\bno (problem|worries|worry|doubt|issue|issues|idea|rush|hurry|need|objection)\b/g;
+
 export function classifyIntent(message: string): Intent {
   const text = message.toLowerCase().trim();
   if (!text) return "unclear";
@@ -87,20 +98,26 @@ export function classifyIntent(message: string): Intent {
   const asksSomething =
     text.includes("?") || QUESTION_WORDS.some((re) => re.test(text));
 
+  const meaningful = text.replace(NOT_A_REFUSAL, " ");
+  const saysNo = HARD_NEGATIVE.some((re) => re.test(meaningful));
+  const mentionsNot = SOFT_NEGATIVE.some((re) => re.test(meaningful));
+  const saysYes = AFFIRMATIVE.some((re) => re.test(meaningful));
+
+  // A message carrying both a refusal and an agreement is not evidence of
+  // either. Both outcomes here are costly — one charges someone, the other
+  // closes the conversation for good — so a conflict resolves to neither.
+  if (saysNo && saysYes) return "unclear";
+
   // An outright no ends it, question attached or not.
-  if (HARD_NEGATIVE.some((re) => re.test(text))) return "negative";
+  if (saysNo) return "negative";
 
   // A softer negation only counts as a refusal when it is not part of a
   // question. "I don't want it" is a no; "what if I don't?" is a question.
-  if (SOFT_NEGATIVE.some((re) => re.test(text)) && !asksSomething) {
-    return "negative";
-  }
+  if (mentionsNot && !asksSomething) return "negative";
 
   // A yes attached to a question ("yes, but what do I lose?") is treated as a
   // question, not consent. The user gets an answer and another chance to agree.
-  if (AFFIRMATIVE.some((re) => re.test(text)) && !asksSomething) {
-    return "affirmative";
-  }
+  if (saysYes && !asksSomething) return "affirmative";
 
   if (asksSomething) return "question";
 

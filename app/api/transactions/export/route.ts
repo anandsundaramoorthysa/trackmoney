@@ -6,6 +6,7 @@ import { csvRow } from "@/lib/csv";
 import { db } from "@/lib/db";
 import { transactions } from "@/lib/db/schema";
 import { getDemoUser } from "@/lib/demo";
+import { paiseToRupeeNumber } from "@/lib/money";
 import { istMonthRange } from "@/lib/time";
 
 export const runtime = "nodejs";
@@ -19,7 +20,8 @@ export const dynamic = "force-dynamic";
  * feature that works without paying is not a feature, it is a claim.
  *
  * Amounts are written in rupees because a spreadsheet is a human-facing
- * boundary, which is the one place lib/money.ts allows the conversion.
+ * boundary — going through lib/money.ts, which is the only place allowed to
+ * convert paise.
  */
 async function handleGET() {
   const user = await getDemoUser();
@@ -51,7 +53,7 @@ async function handleGET() {
         r.occurredOn,
         r.merchant,
         r.category,
-        (r.amountPaise / 100).toFixed(2),
+        paiseToRupeeNumber(r.amountPaise).toFixed(2),
       ]),
     ),
   ];

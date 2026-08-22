@@ -306,6 +306,7 @@ export async function markPaymentSuccessful(input: {
         outcome: "unknown_order",
         orderId: input.orderId,
         paymentId: input.paymentId,
+        moneyMoved: false,
       },
     });
     return { settled: false, reason: "unknown_order" };
@@ -359,12 +360,49 @@ export async function markPaymentFailed(input: {
 
   // Scoped to the account, exactly as the success path is. An order id is not
   // a capability: knowing one must not let a different account write to it.
+  const [existing] = await db
+    .select()
+    .from(payments)
+    .where(
+      and(
+        eq(payments.razorpayOrderId, input.orderId),
+        eq(payments.userId, input.user.id),
+      ),
+    )
+    .limit(1);
+
+  /**
+   * A payment that already succeeded cannot later become a failure.
+   *
+   * Razorpay's `payment.failed` fires per attempt, not per order, so a user who
+   * fails once and retries in the same modal produces both events — and the
+   * failure POST is not awaited, so it can land last. Without this guard the
+   * order that bought Pro ends up marked failed, with the account still on Pro
+   * and the trail asserting nothing was charged.
+   */
+  if (existing?.status === "success") {
+    await logAgentEvent({
+      userId: input.user.id,
+      conversationId,
+      type: "checkout_result",
+      explanation: `A failure was reported for ${input.orderId}, but that payment had already been verified and settled, so it was ignored.`,
+      meta: {
+        outcome: "late_failure_ignored",
+        orderId: input.orderId,
+        moneyMoved: false,
+        initiatedBy: existing.initiatedBy,
+      },
+    });
+    return;
+  }
+
   const updated = await db
     .update(payments)
     .set({
       status: "failed",
       failureReason: input.reason.slice(0, 500),
-      razorpayPaymentId: input.paymentId ?? null,
+      // Only overwrite the payment id if we were actually given one.
+      ...(input.paymentId ? { razorpayPaymentId: input.paymentId } : {}),
     })
     .where(
       and(
@@ -395,6 +433,9 @@ export async function markPaymentFailed(input: {
       outcome: "failed",
       orderId: input.orderId,
       reason: input.reason,
+      // Present on success rows too, so the activity page can say whose
+      // payment this was on the failure path as well.
+      initiatedBy: updated[0].initiatedBy,
     },
   });
 }

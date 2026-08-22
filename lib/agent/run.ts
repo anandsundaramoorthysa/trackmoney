@@ -1,5 +1,5 @@
 import { logAgentEvent } from "@/lib/audit";
-import type { User } from "@/lib/db/schema";
+import type { Conversation, User } from "@/lib/db/schema";
 import { computeUsageFacts, hasUpgradeCase, type UsageFacts } from "@/lib/facts";
 import {
   getOrCreateConversation,
@@ -43,6 +43,8 @@ import {
 
 export type AgentTurnResult = {
   conversationId: string;
+  /** So the client can drop a stale checkout handoff when the sale is closed. */
+  state: Conversation["state"];
   reply: string;
   provider: LlmProvider;
   checkout: CheckoutHandoff | null;
@@ -159,6 +161,7 @@ export async function runAgentTurn(input: {
 
       return {
         conversationId: conversation.id,
+        state: "declined",
         reply,
         provider: "template",
         checkout: null,
@@ -182,6 +185,7 @@ export async function runAgentTurn(input: {
 
       return {
         conversationId: conversation.id,
+        state: "declined",
         reply,
         provider: "template",
         checkout: null,
@@ -210,6 +214,7 @@ export async function runAgentTurn(input: {
 
     return {
       conversationId: conversation.id,
+      state: conversation.state,
       reply,
       provider: "template",
       checkout: null,
@@ -310,10 +315,20 @@ export async function runAgentTurn(input: {
     }
   }
 
-  // After a decline the agent speaks only in wording that has been checked not
-  // to re-open the sale. Grounding catches invented numbers, not renewed
-  // persuasion, so free-form generation is not used here at all.
-  if (conversation.state === "declined") {
+  /**
+   * Wording is vetted, not merely grounded, whenever there is nothing left to
+   * sell — after a decline, and equally for an account that already pays.
+   *
+   * Grounding catches invented numbers, not renewed persuasion: the price is
+   * legitimately in the facts, so a re-pitch passes it cleanly. The only thing
+   * stopping the model pitching a paying customer was a line in the system
+   * prompt, which PLAN §6.6 is explicit is a request rather than a bound.
+   */
+  if (
+    conversation.state === "declined" ||
+    conversation.state === "converted" ||
+    user.plan === "pro"
+  ) {
     modelReply = null;
   }
 
@@ -338,6 +353,9 @@ export async function runAgentTurn(input: {
 
   return {
     conversationId: conversation.id,
+    state: toolOutcome === "ran" && requested === "explainSuggestion"
+      ? "pitched"
+      : conversation.state,
     reply: grounded.text,
     provider,
     checkout,

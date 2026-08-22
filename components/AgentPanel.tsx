@@ -16,6 +16,7 @@ type HistoryMessage = { id: string; role: Message["role"]; text: string };
 
 type TurnResponse = {
   reply: string;
+  state?: string;
   skipped?: boolean;
   messages?: HistoryMessage[];
   provider: string;
@@ -144,6 +145,10 @@ export function AgentPanel({
       push({ id: `a-${Date.now()}`, role: "agent", text: turn.reply });
       setMeta(describeTurn(turn));
       if (turn.checkout) setCheckout(turn.checkout);
+      // Once the user has said no, the offer goes with it. Leaving the button
+      // under "I will not bring this up again" would contradict the sentence
+      // directly above it.
+      if (turn.state === "declined") setCheckout(null);
       router.refresh();
     } catch {
       push({

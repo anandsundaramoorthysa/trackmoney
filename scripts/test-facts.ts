@@ -163,6 +163,30 @@ test("telling it to stop is still a refusal", () => {
   assert.equal(classifyIntent("stop"), "negative");
 });
 
+console.log("\n'no' is not always a refusal");
+test("no problem, go ahead is consent", () => {
+  assert.equal(classifyIntent("no problem, go ahead"), "affirmative");
+});
+test("no worries, set it up is consent", () => {
+  assert.equal(classifyIntent("no worries, set it up"), "affirmative");
+});
+test("I have no issue with that, do it is consent", () => {
+  assert.equal(classifyIntent("I have no issue with that, do it"), "affirmative");
+});
+test("no idea what Pro does is a question", () => {
+  assert.equal(classifyIntent("no idea what Pro does, tell me more"), "question");
+});
+test("a bare no is still a refusal", () => {
+  assert.equal(classifyIntent("no"), "negative");
+});
+test("no thanks, but how much is it? is still a refusal", () => {
+  assert.equal(classifyIntent("no thanks, but how much is it?"), "negative");
+});
+test("a message that both refuses and agrees is neither", () => {
+  // Both outcomes are costly, so a conflicting message resolves to neither.
+  assert.equal(classifyIntent("no thanks, actually yes do it"), "unclear");
+});
+
 console.log("\ncounts are checked like any other figure");
 test("rejects a small number the facts do not contain", () => {
   // 0 was previously waved through as "list phrasing", along with 1, 2 and 3 —

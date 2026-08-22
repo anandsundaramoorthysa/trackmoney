@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { handleRouteError } from "@/lib/api-errors";
 import { and, desc, eq } from "drizzle-orm";
 
-import { listConversationEvents } from "@/lib/audit";
+import { conversationForOrder, listConversationEvents } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { payments } from "@/lib/db/schema";
 import { RAZORPAY_CURRENCY, razorpayCredentials } from "@/lib/razorpay";
@@ -50,26 +50,37 @@ async function handleGET() {
    * An order the agent prepared but nobody has paid yet. Without this the
    * agent's "use the button below" message survived a reload while the button
    * itself did not, stranding an open order.
+   *
+   * Which orders count is decided the same way payment outcomes are — by which
+   * conversation handed the order over — rather than by `initiatedBy`. An order
+   * started on the Billing page and then handed over by the agent is the
+   * agent's to restore, and reading the flag missed exactly that case.
+   *
+   * A declined conversation restores nothing: leaving a live checkout button
+   * under "I will not bring this up again" would be the nagging the rule exists
+   * to prevent.
    */
-  const [open] = await db
-    .select()
-    .from(payments)
-    .where(
-      and(
-        eq(payments.userId, user.id),
-        eq(payments.status, "created"),
-        eq(payments.initiatedBy, "agent"),
-      ),
-    )
-    .orderBy(desc(payments.createdAt))
-    .limit(1);
+  const [open] =
+    conversation.state === "declined"
+      ? []
+      : await db
+          .select()
+          .from(payments)
+          .where(
+            and(eq(payments.userId, user.id), eq(payments.status, "created")),
+          )
+          .orderBy(desc(payments.createdAt))
+          .limit(1);
+
+  const handedOverHere =
+    open && (await conversationForOrder(user.id, open.razorpayOrderId)) === conversation.id;
 
   return NextResponse.json({
     conversationId: conversation.id,
     state: conversation.state,
     plan: user.plan,
     messages: toChatMessages(events),
-    checkout: open
+    checkout: open && handedOverHere
       ? {
           orderId: open.razorpayOrderId,
           amountPaise: open.amountPaise,

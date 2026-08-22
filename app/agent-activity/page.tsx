@@ -141,6 +141,7 @@ function labelFor(
   const outcome = (meta as { outcome?: string } | null)?.outcome;
   if (outcome === "order_creation_failed") return "Order could not be created";
   if (outcome === "unknown_order") return "Unrecognised payment";
+  if (outcome === "late_failure_ignored") return "Late failure ignored";
   if ((meta as { reused?: boolean } | null)?.reused === true) {
     return "Existing order reused";
   }
