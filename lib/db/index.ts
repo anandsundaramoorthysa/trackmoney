@@ -1,5 +1,7 @@
 import { neon } from "@neondatabase/serverless";
-import { drizzle, type NeonHttpDatabase } from "drizzle-orm/neon-http";
+import { drizzle as drizzleNeon, type NeonHttpDatabase } from "drizzle-orm/neon-http";
+import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 
 import * as schema from "./schema";
 
@@ -7,7 +9,26 @@ type Database = NeonHttpDatabase<typeof schema>;
 
 let instance: Database | null = null;
 
+/**
+ * Neon in production, plain Postgres anywhere else.
+ *
+ * Neon's serverless driver speaks an HTTP protocol that only Neon answers, so
+ * pointing it at a local `postgres://localhost` database fails. Choosing the
+ * driver from the host means the same code runs against Neon on Vercel, against
+ * a local Postgres for development, and against a throwaway database in the
+ * test suite — without the app carrying a separate "test mode".
+ */
+function isNeonUrl(url: string): boolean {
+  try {
+    return new URL(url).hostname.endsWith(".neon.tech");
+  } catch {
+    return false;
+  }
+}
+
 function connect(): Database {
+  if (instance) return instance;
+
   const connectionString = process.env.DATABASE_URL;
 
   if (!connectionString) {
@@ -16,7 +37,12 @@ function connect(): Database {
     );
   }
 
-  instance ??= drizzle(neon(connectionString), { schema });
+  instance = isNeonUrl(connectionString)
+    ? drizzleNeon(neon(connectionString), { schema })
+    : (drizzlePg(new Pool({ connectionString }), {
+        schema,
+      }) as unknown as Database);
+
   return instance;
 }
 

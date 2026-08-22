@@ -10,6 +10,8 @@ import {
   answerTemplate,
   checkGrounding,
   declineTemplate,
+  proAnswerTemplate,
+  reopenAfterDeclineTemplate,
   suggestionTemplate,
 } from "./grounding";
 import { classifyIntent, INTENT_EXPLANATION, type Intent } from "./intent";
@@ -126,6 +128,45 @@ export async function runAgentTurn(input: {
       },
     });
 
+    // Someone who declined earlier and now asks to upgrade anyway. The agent
+    // stays stopped, but silence would be the wrong kind of stopped: the rule
+    // is only credible if you can see it being applied, so this is refused out
+    // loud and written to the trail like any other refusal.
+    if (intent === "affirmative" && conversation.state === "declined") {
+      const reply = reopenAfterDeclineTemplate();
+
+      await logAgentEvent({
+        userId: user.id,
+        conversationId: conversation.id,
+        type: "tool_refused",
+        explanation:
+          "The user declined this upgrade earlier, so the agent did not act on a later yes. The manual Billing page path is unaffected.",
+        meta: {
+          rule: "stopped_after_decline",
+          tool: "createCheckoutOrder",
+          enforcedIn: "lib/agent/run.ts",
+        },
+      });
+
+      await logAgentEvent({
+        userId: user.id,
+        conversationId: conversation.id,
+        type: "agent_reply",
+        explanation: reply,
+        meta: { provider: "template", reason: "declined_conversation" },
+      });
+
+      return {
+        conversationId: conversation.id,
+        reply,
+        provider: "template",
+        checkout: null,
+        toolRequested: "createCheckoutOrder",
+        toolOutcome: "refused",
+        grounding: "template_only",
+      };
+    }
+
     // A no ends it here. No model call, nothing to decide.
     if (intent === "negative") {
       await setConversationState(conversation.id, "declined");
@@ -221,7 +262,10 @@ export async function runAgentTurn(input: {
   const ctx: ToolContext = { user, conversation, facts };
   let checkout: CheckoutHandoff | null = null;
   let toolOutcome: AgentTurnResult["toolOutcome"] = "not_requested";
-  let deterministicReply = answerTemplate(facts);
+  // An account that already pays has nothing to be sold, so its fallback
+  // wording must not end by offering the upgrade.
+  let deterministicReply =
+    user.plan === "pro" ? proAnswerTemplate(facts) : answerTemplate(facts);
   let eventType: "suggestion" | "agent_reply" = "agent_reply";
   let modelReply = choice?.reply ?? null;
 
@@ -233,7 +277,8 @@ export async function runAgentTurn(input: {
       deterministicReply = suggestionTemplate(facts);
     } else {
       toolOutcome = "refused";
-      deterministicReply = answerTemplate(facts);
+      deterministicReply =
+        user.plan === "pro" ? proAnswerTemplate(facts) : answerTemplate(facts);
     }
   } else if (requested === "createCheckoutOrder") {
     const outcome = await runCreateCheckoutOrder(ctx);

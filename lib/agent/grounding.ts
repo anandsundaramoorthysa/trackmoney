@@ -121,6 +121,34 @@ export function answerTemplate(facts: UsageFacts): string {
     .join(" ");
 }
 
+/**
+ * What the agent says to someone who is already paying.
+ *
+ * A Pro account has nothing to be sold, so the ordinary answer template — which
+ * ends by offering the upgrade — would be both useless and faintly insulting to
+ * a customer who already bought it.
+ */
+export function proAnswerTemplate(facts: UsageFacts): string {
+  return [
+    `You are on Pro, so there is no cap on transactions — you have logged ${facts.txnCountThisMonth} in ${facts.monthLabel}.`,
+    facts.recurringCount > 0
+      ? `I am tracking ${facts.recurringCount} recurring charges for you: ${listRecurring(facts)}.`
+      : "I am not seeing any recurring charges yet.",
+    "Ask me anything about your spending.",
+  ].join(" ");
+}
+
+/**
+ * For someone who declined and later asks to upgrade anyway.
+ *
+ * The agent stays stopped — that is the whole point of the decline rule — but
+ * it says so plainly and points at the path that does not involve it, rather
+ * than going quiet and leaving the person stuck.
+ */
+export function reopenAfterDeclineTemplate(): string {
+  return "You told me earlier that you did not want this, so I am not going to set it up from here. If you have changed your mind, the Billing page has an Upgrade to Pro button that works without me.";
+}
+
 export function declineTemplate(): string {
   return "Understood — I will leave your plan as it is and I will not bring this up again in this session. Everything on Free keeps working; you can always upgrade yourself from the Billing page.";
 }

@@ -11,9 +11,28 @@
  * more version-churn risks for maybe forty lines saved.
  */
 
-const GROQ_MODEL = process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile";
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
 const TIMEOUT_MS = 12_000;
+
+/**
+ * Read per call, never captured at module load.
+ *
+ * Module-level `process.env` reads freeze whatever happened to be set the
+ * instant the module was first imported, which makes behaviour depend on import
+ * order — the kind of thing that works in production and quietly does the wrong
+ * thing everywhere else. The base URLs are overridable so the test suite can
+ * drive both providers deterministically, including making one fail to prove
+ * the fallback actually falls back. Production never sets them.
+ */
+function config() {
+  return {
+    groqModel: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
+    geminiModel: process.env.GEMINI_MODEL ?? "gemini-2.0-flash",
+    groqBase: process.env.GROQ_BASE_URL ?? "https://api.groq.com/openai/v1",
+    geminiBase:
+      process.env.GEMINI_BASE_URL ??
+      "https://generativelanguage.googleapis.com/v1beta",
+  };
+}
 
 export type LlmProvider = "groq" | "gemini" | "template";
 
@@ -26,8 +45,10 @@ async function callGroq(system: string, user: string): Promise<string> {
   const key = process.env.GROQ_API_KEY;
   if (!key) throw new Error("GROQ_API_KEY not set");
 
+  const { groqBase, groqModel } = config();
+
   const response = await fetch(
-    "https://api.groq.com/openai/v1/chat/completions",
+    `${groqBase}/chat/completions`,
     {
       method: "POST",
       headers: {
@@ -35,7 +56,7 @@ async function callGroq(system: string, user: string): Promise<string> {
         Authorization: `Bearer ${key}`,
       },
       body: JSON.stringify({
-        model: GROQ_MODEL,
+        model: groqModel,
         temperature: 0.2,
         max_tokens: 500,
         response_format: { type: "json_object" },
@@ -64,8 +85,10 @@ async function callGemini(system: string, user: string): Promise<string> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY not set");
 
+  const { geminiBase, geminiModel } = config();
+
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+    `${geminiBase}/models/${geminiModel}:generateContent`,
     {
       method: "POST",
       headers: {
