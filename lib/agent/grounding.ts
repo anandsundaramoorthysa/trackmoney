@@ -38,12 +38,12 @@ export function allowedNumberStrings(facts: UsageFacts): Set<string> {
     facts.proFeatures.length,
     facts.freeFeatures.length,
     facts.proOnlyFeatures.length,
-    // Ordinals and small counts the model uses for list phrasing.
-    0,
-    1,
-    2,
-    3,
   ];
+
+  // Note what is deliberately NOT here: a blanket allowance for small numbers.
+  // Waving through 0-3 for "list phrasing" also waved through every wrong small
+  // count — "2 of your charges repeat" passed the check while the facts said 3.
+  // A count is exactly the kind of figure this is supposed to police.
 
   for (const candidate of facts.recurringCandidates) {
     values.push(paiseToRupeeNumber(candidate.amountPaise));

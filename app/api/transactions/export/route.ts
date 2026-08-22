@@ -2,6 +2,7 @@ import { and, desc, eq, gte, lt } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { handleRouteError } from "@/lib/api-errors";
+import { csvRow } from "@/lib/csv";
 import { db } from "@/lib/db";
 import { transactions } from "@/lib/db/schema";
 import { getDemoUser } from "@/lib/demo";
@@ -9,10 +10,6 @@ import { istMonthRange } from "@/lib/time";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function csvCell(value: string): string {
-  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
-}
 
 /**
  * CSV export — a Pro feature that exists.
@@ -50,12 +47,12 @@ async function handleGET() {
   const lines = [
     "date,merchant,category,amount_inr",
     ...rows.map((r) =>
-      [
+      csvRow([
         r.occurredOn,
-        csvCell(r.merchant),
-        csvCell(r.category),
+        r.merchant,
+        r.category,
         (r.amountPaise / 100).toFixed(2),
-      ].join(","),
+      ]),
     ),
   ];
 

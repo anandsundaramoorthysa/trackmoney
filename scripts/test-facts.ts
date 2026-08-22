@@ -4,6 +4,7 @@ import { checkGrounding, suggestionTemplate } from "@/lib/agent/grounding";
 import { classifyIntent } from "@/lib/agent/intent";
 import type { UsageFacts } from "@/lib/facts";
 import { formatPaise } from "@/lib/money";
+import { csvCell } from "@/lib/csv";
 import { detectRecurring } from "@/lib/recurring";
 
 /**
@@ -160,6 +161,48 @@ test("a plain refusal using the same words is still a refusal", () => {
 });
 test("telling it to stop is still a refusal", () => {
   assert.equal(classifyIntent("stop"), "negative");
+});
+
+console.log("\ncounts are checked like any other figure");
+test("rejects a small number the facts do not contain", () => {
+  // 0 was previously waved through as "list phrasing", along with 1, 2 and 3 —
+  // which meant a wrong small count passed the check unchallenged.
+  const check = checkGrounding("0 of your charges repeat every month.", FACTS);
+  assert.equal(check.ok, false, "a small number passed without support");
+});
+test("cannot tell which fact a number refers to — a known limit", () => {
+  // 3 is in the facts as overCapBy, so using it as a recurring count passes.
+  // The check verifies a figure came from the data, not that it was used for
+  // the right thing. Asserting the limit so nobody mistakes it for a guarantee.
+  const check = checkGrounding("3 of your charges repeat every month.", FACTS);
+  assert.equal(check.ok, true);
+});
+test("still accepts a count that matches the facts", () => {
+  const check = checkGrounding("2 of your charges repeat every month.", FACTS);
+  assert.equal(check.ok, true, `offending: ${check.offending.join(", ")}`);
+});
+
+console.log("\nCSV export");
+test("quotes cells containing a comma", () => {
+  assert.equal(csvCell("Swiggy, Bangalore"), '"Swiggy, Bangalore"');
+});
+test("doubles embedded quotes", () => {
+  assert.equal(csvCell('The "Big" Store'), '"The ""Big"" Store"');
+});
+test("neutralises a spreadsheet formula", () => {
+  // A merchant name is data flowing into a file Excel will evaluate.
+  const cell = csvCell("=1+1");
+  assert.ok(!cell.startsWith("="), `formula left executable: ${cell}`);
+  assert.ok(cell.includes("=1+1"), "the value must still be readable");
+});
+test("neutralises the other formula lead characters", () => {
+  for (const lead of ["+", "-", "@"]) {
+    const cell = csvCell(`${lead}HYPERLINK("x")`);
+    assert.ok(!cell.startsWith(lead), `formula left executable: ${cell}`);
+  }
+});
+test("leaves ordinary values alone", () => {
+  assert.equal(csvCell("Netflix India"), "Netflix India");
 });
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

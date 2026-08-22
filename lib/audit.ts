@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { agentEvents, type AgentEvent, type AgentEventType } from "@/lib/db/schema";
@@ -56,6 +56,44 @@ export async function listConversationEvents(
     .from(agentEvents)
     .where(eq(agentEvents.conversationId, conversationId))
     .orderBy(agentEvents.createdAt, agentEvents.id);
+}
+
+/**
+ * Which conversation, if any, handed this order to the user.
+ *
+ * Attribution cannot be read off `payments.initiatedBy` alone: an order started
+ * on the Billing page and then handed over by the agent (rule 3 reuses the open
+ * order) was genuinely paid through the agent's button, and the chat needs to
+ * learn how it ended. The audit trail already records exactly that — a
+ * `checkout_created` row carrying the order id and the conversation it was
+ * offered in — so the trail is the honest source for this, not a flag.
+ */
+export async function conversationForOrder(
+  userId: string,
+  orderId: string,
+): Promise<string | null> {
+  const rows = await db
+    .select({
+      conversationId: agentEvents.conversationId,
+      meta: agentEvents.meta,
+    })
+    .from(agentEvents)
+    .where(
+      and(
+        eq(agentEvents.userId, userId),
+        eq(agentEvents.type, "checkout_created"),
+      ),
+    )
+    .orderBy(desc(agentEvents.createdAt), desc(agentEvents.id));
+
+  for (const row of rows) {
+    if (!row.conversationId) continue;
+    if ((row.meta as { orderId?: string } | null)?.orderId === orderId) {
+      return row.conversationId;
+    }
+  }
+
+  return null;
 }
 
 export const EVENT_LABELS: Record<AgentEventType, string> = {

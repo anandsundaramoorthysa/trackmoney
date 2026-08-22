@@ -1,9 +1,10 @@
-import { and, desc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { handleRouteError } from "@/lib/api-errors";
+import { conversationForOrder } from "@/lib/audit";
 import { db } from "@/lib/db";
-import { conversations, payments } from "@/lib/db/schema";
+import { conversations } from "@/lib/db/schema";
 import { getDemoUser } from "@/lib/demo";
 import {
   markPaymentFailed,
@@ -48,29 +49,20 @@ async function handlePOST(request: Request) {
     );
   }
 
-  const [conversation] = await db
-    .select()
-    .from(conversations)
-    .where(eq(conversations.userId, user.id))
-    .orderBy(desc(conversations.createdAt))
-    .limit(1);
 
-  const [payment] = await db
-    .select()
-    .from(payments)
-    .where(
-      and(eq(payments.razorpayOrderId, orderId), eq(payments.userId, user.id)),
-    )
-    .limit(1);
 
   /**
    * A payment started from the billing page has nothing to do with the agent,
    * so attaching its outcome to the agent's conversation made the trail — and
    * the chat panel, which replays conversation events — report the agent as
    * having done something a person did alone.
+   *
+   * The reverse case matters too: an order the agent handed over was paid
+   * through the agent's button even if a person created it first, and the chat
+   * has to learn the outcome. The audit trail records which conversation
+   * offered which order, so that is what decides it.
    */
-  const conversationIdFor = (row?: { initiatedBy: string }) =>
-    row?.initiatedBy === "agent" ? (conversation?.id ?? null) : null;
+  const attributedConversationId = await conversationForOrder(user.id, orderId);
 
   const valid = verifyPaymentSignature({ orderId, paymentId, signature });
 
@@ -80,7 +72,6 @@ async function handlePOST(request: Request) {
       orderId,
       paymentId,
       reason: "the payment signature did not verify against our key secret, so it was rejected.",
-      conversationId: conversationIdFor(payment),
     });
 
     return NextResponse.json(
@@ -93,7 +84,6 @@ async function handlePOST(request: Request) {
     user,
     orderId,
     paymentId,
-    conversationId: conversationIdFor(payment),
   });
 
   if (!settlement.settled) {
@@ -108,11 +98,11 @@ async function handlePOST(request: Request) {
     );
   }
 
-  if (conversation && payment?.initiatedBy === "agent") {
+  if (attributedConversationId) {
     await db
       .update(conversations)
       .set({ state: "converted" })
-      .where(eq(conversations.id, conversation.id));
+      .where(eq(conversations.id, attributedConversationId));
   }
 
   return NextResponse.json({

@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
 
-import { logAgentEvent } from "@/lib/audit";
+import { conversationForOrder, logAgentEvent } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { payments, planConfig, users, type User } from "@/lib/db/schema";
 import { formatPaise } from "@/lib/money";
@@ -274,8 +274,11 @@ export async function markPaymentSuccessful(input: {
   user: User;
   orderId: string;
   paymentId: string;
-  conversationId?: string | null;
 }): Promise<SettleResult> {
+  // Resolved here rather than by each caller, so every path attributes the
+  // outcome the same way: to whichever conversation handed this order over.
+  const conversationId = await conversationForOrder(input.user.id, input.orderId);
+
   const [existing] = await db
     .select()
     .from(payments)
@@ -295,7 +298,7 @@ export async function markPaymentSuccessful(input: {
   if (!existing) {
     await logAgentEvent({
       userId: input.user.id,
-      conversationId: input.conversationId ?? null,
+      conversationId,
       type: "checkout_result",
       explanation:
         "A correctly signed payment arrived for an order this account has no record of, so the plan was left unchanged. This happens if the demo data is reset while a checkout is open.",
@@ -326,7 +329,7 @@ export async function markPaymentSuccessful(input: {
 
   await logAgentEvent({
     userId: input.user.id,
-    conversationId: input.conversationId ?? null,
+    conversationId,
     type: "checkout_result",
     explanation: `Payment verified and the account is now on Pro. Charged ${formatPaise(existing.amountPaise)} in Razorpay test mode.`,
     facts: { amountPaise: existing.amountPaise },
@@ -351,20 +354,41 @@ export async function markPaymentFailed(input: {
   orderId: string;
   reason: string;
   paymentId?: string | null;
-  conversationId?: string | null;
 }): Promise<void> {
-  await db
+  const conversationId = await conversationForOrder(input.user.id, input.orderId);
+
+  // Scoped to the account, exactly as the success path is. An order id is not
+  // a capability: knowing one must not let a different account write to it.
+  const updated = await db
     .update(payments)
     .set({
       status: "failed",
       failureReason: input.reason.slice(0, 500),
       razorpayPaymentId: input.paymentId ?? null,
     })
-    .where(eq(payments.razorpayOrderId, input.orderId));
+    .where(
+      and(
+        eq(payments.razorpayOrderId, input.orderId),
+        eq(payments.userId, input.user.id),
+      ),
+    )
+    .returning();
+
+  if (updated.length === 0) {
+    await logAgentEvent({
+      userId: input.user.id,
+      conversationId,
+      type: "checkout_result",
+      explanation:
+        "A payment failure was reported for an order this account has no record of, so nothing was changed.",
+      meta: { outcome: "unknown_order", orderId: input.orderId, moneyMoved: false },
+    });
+    return;
+  }
 
   await logAgentEvent({
     userId: input.user.id,
-    conversationId: input.conversationId ?? null,
+    conversationId,
     type: "checkout_result",
     explanation: `The payment did not go through: ${input.reason} The account is unchanged and still on Free. Nothing was charged.`,
     meta: {
