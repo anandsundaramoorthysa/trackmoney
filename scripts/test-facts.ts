@@ -45,6 +45,8 @@ const FACTS: UsageFacts = {
   recurringCount: 2,
   recurringMonthlyTotalPaise: 214_800,
   proPricePaise: 49_900,
+  visibleTxnCap: 20,
+  showsRecurringDetail: false,
   freeFeatures: ["Up to 20 transactions per month"],
   proFeatures: [
     "Up to 20 transactions per month",
@@ -131,6 +133,33 @@ test("rejects an invented figure", () => {
 test("rejects a wrong price even when everything else is right", () => {
   const check = checkGrounding("Pro costs ₹299 as a one-time unlock.", FACTS);
   assert.equal(check.ok, false);
+});
+test("rejects the price stated in paise as though it were rupees", () => {
+  // 49900 is a real number in the facts — as paise. Quoting it as the price is
+  // a 100x error, and the model is never shown paise in the first place.
+  const check = checkGrounding("Pro is a one-time ₹49,900 unlock.", FACTS);
+  assert.equal(check.ok, false, "a 100x price passed the grounding check");
+});
+test("rejects a recurring amount stated in paise", () => {
+  const check = checkGrounding("Netflix India charges you ₹64,900.", FACTS);
+  assert.equal(check.ok, false);
+});
+
+console.log("\nquestions are not refusals");
+test("asking what happens without upgrading is a question", () => {
+  assert.equal(classifyIntent("what happens if I don't upgrade?"), "question");
+});
+test("asking about cancelling is a question", () => {
+  assert.equal(classifyIntent("can I cancel later?"), "question");
+});
+test("asking whether it stops tracking is a question", () => {
+  assert.equal(classifyIntent("will it stop tracking my other transactions?"), "question");
+});
+test("a plain refusal using the same words is still a refusal", () => {
+  assert.equal(classifyIntent("I don't want it"), "negative");
+});
+test("telling it to stop is still a refusal", () => {
+  assert.equal(classifyIntent("stop"), "negative");
 });
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

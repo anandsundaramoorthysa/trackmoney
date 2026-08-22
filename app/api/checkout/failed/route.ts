@@ -1,9 +1,9 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { handleRouteError } from "@/lib/api-errors";
 import { db } from "@/lib/db";
-import { conversations } from "@/lib/db/schema";
+import { conversations, payments } from "@/lib/db/schema";
 import { getDemoUser } from "@/lib/demo";
 import { markPaymentFailed } from "@/lib/razorpay";
 
@@ -39,12 +39,27 @@ async function handlePOST(request: Request) {
     .orderBy(desc(conversations.createdAt))
     .limit(1);
 
+  const [payment] = await db
+    .select()
+    .from(payments)
+    .where(
+      and(
+        eq(payments.razorpayOrderId, body.orderId),
+        eq(payments.userId, user.id),
+      ),
+    )
+    .limit(1);
+
+  // Only an agent-initiated payment belongs to the agent's conversation.
+  const conversationId =
+    payment?.initiatedBy === "agent" ? (conversation?.id ?? null) : null;
+
   await markPaymentFailed({
     user,
     orderId: body.orderId,
     paymentId: body.paymentId ?? null,
     reason: (body.reason ?? "Razorpay reported the payment as failed.").slice(0, 300),
-    conversationId: conversation?.id ?? null,
+    conversationId,
   });
 
   return NextResponse.json({ recorded: true });

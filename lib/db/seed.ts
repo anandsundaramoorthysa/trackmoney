@@ -140,9 +140,9 @@ export async function seedDatabase(): Promise<SeedSummary> {
       recurringDetection: false,
       pricePaise: 0,
       features: [
-        `Up to ${FREE_TXN_CAP} transactions per month`,
-        "Manual categories",
-        "Monthly summary",
+        `Shows your most recent ${FREE_TXN_CAP} transactions each month`,
+        "Counts how many charges look recurring",
+        "Monthly spend summary",
       ],
     },
     {
@@ -152,11 +152,10 @@ export async function seedDatabase(): Promise<SeedSummary> {
       recurringDetection: true,
       pricePaise: PRO_PRICE_PAISE,
       features: [
-        "Unlimited transactions per month",
-        "Manual categories",
-        "Monthly summary",
-        "Automatic recurring-subscription detection",
-        "Category breakdown and CSV export",
+        "Shows every transaction in the month, with no cap",
+        "Names the recurring charges it finds, not just the count",
+        "Monthly spend summary",
+        "CSV export of the month's transactions",
       ],
     },
   ]);

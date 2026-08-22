@@ -155,7 +155,9 @@ export async function createProUpgradeOrder(
       explanation: `Reused the open ${formatPaise(existing.amountPaise)} order ${existing.razorpayOrderId} instead of creating a second one.`,
       meta: {
         rule: "one_open_order_per_user",
+        // A deduplicated no-op, not a new money action.
         reused: true,
+        moneyMoved: false,
         orderId: existing.razorpayOrderId,
         initiatedBy: options.initiatedBy,
       },
@@ -222,8 +224,14 @@ export async function createProUpgradeOrder(
       userId: user.id,
       conversationId: options.conversationId ?? null,
       type: "checkout_result",
-      explanation: `Could not create the Razorpay order: ${message}`,
-      meta: { outcome: "order_creation_failed", initiatedBy: options.initiatedBy },
+      explanation: `Could not create the Razorpay order: ${message}. No payment was attempted.`,
+      meta: {
+        outcome: "order_creation_failed",
+        // Not a payment outcome: no order existed, so nothing could be paid.
+        // The activity page reads this to label and tally the row honestly.
+        moneyMoved: false,
+        initiatedBy: options.initiatedBy,
+      },
     });
 
     return { ok: false, rule: "razorpay_error", message };
@@ -258,17 +266,61 @@ export function verifyPaymentSignature(input: {
   return crypto.timingSafeEqual(expectedBuf, receivedBuf);
 }
 
+export type SettleResult =
+  | { settled: true; amountPaise: number; alreadySettled: boolean }
+  | { settled: false; reason: "unknown_order" };
+
 export async function markPaymentSuccessful(input: {
   user: User;
   orderId: string;
   paymentId: string;
   conversationId?: string | null;
-}): Promise<{ amountPaise: number }> {
-  const [payment] = await db
+}): Promise<SettleResult> {
+  const [existing] = await db
+    .select()
+    .from(payments)
+    .where(
+      and(
+        eq(payments.razorpayOrderId, input.orderId),
+        eq(payments.userId, input.user.id),
+      ),
+    )
+    .limit(1);
+
+  // A validly signed payment for an order this database has never heard of —
+  // reachable by resetting the demo while a checkout is open. Previously the
+  // amount defaulted to zero, so the trail recorded "Charged ₹0" and granted
+  // Pro anyway. An unknown amount is not a zero amount, and it is not something
+  // to settle silently.
+  if (!existing) {
+    await logAgentEvent({
+      userId: input.user.id,
+      conversationId: input.conversationId ?? null,
+      type: "checkout_result",
+      explanation:
+        "A correctly signed payment arrived for an order this account has no record of, so the plan was left unchanged. This happens if the demo data is reset while a checkout is open.",
+      meta: {
+        outcome: "unknown_order",
+        orderId: input.orderId,
+        paymentId: input.paymentId,
+      },
+    });
+    return { settled: false, reason: "unknown_order" };
+  }
+
+  // Replaying the same verification must not write a second success.
+  if (existing.status === "success") {
+    return {
+      settled: true,
+      amountPaise: existing.amountPaise,
+      alreadySettled: true,
+    };
+  }
+
+  await db
     .update(payments)
     .set({ status: "success", razorpayPaymentId: input.paymentId })
-    .where(eq(payments.razorpayOrderId, input.orderId))
-    .returning();
+    .where(eq(payments.id, existing.id));
 
   await db.update(users).set({ plan: "pro" }).where(eq(users.id, input.user.id));
 
@@ -276,17 +328,22 @@ export async function markPaymentSuccessful(input: {
     userId: input.user.id,
     conversationId: input.conversationId ?? null,
     type: "checkout_result",
-    explanation: `Payment verified and the account is now on Pro. Charged ${formatPaise(payment?.amountPaise ?? 0)} in Razorpay test mode.`,
-    facts: { amountPaise: payment?.amountPaise ?? 0 },
+    explanation: `Payment verified and the account is now on Pro. Charged ${formatPaise(existing.amountPaise)} in Razorpay test mode.`,
+    facts: { amountPaise: existing.amountPaise },
     meta: {
       outcome: "success",
       orderId: input.orderId,
       paymentId: input.paymentId,
       verification: "hmac_sha256_signature_match",
+      initiatedBy: existing.initiatedBy,
     },
   });
 
-  return { amountPaise: payment?.amountPaise ?? 0 };
+  return {
+    settled: true,
+    amountPaise: existing.amountPaise,
+    alreadySettled: false,
+  };
 }
 
 export async function markPaymentFailed(input: {

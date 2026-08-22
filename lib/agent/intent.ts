@@ -14,13 +14,32 @@
 
 export type Intent = "affirmative" | "negative" | "question" | "unclear";
 
-const NEGATIVE = [
+/**
+ * An unambiguous refusal. These end the conversation even when a question is
+ * attached, because "no thanks, but how much is it?" is still a no.
+ */
+const HARD_NEGATIVE = [
   /\bno\b/,
   /\bnope\b/,
   /\bnah\b/,
   /\bnot now\b/,
   /\bnot interested\b/,
+  /\bno thanks\b/,
   /\bmaybe later\b/,
+];
+
+/**
+ * Words that merely *mention* not-doing-something. On their own they read as a
+ * refusal; inside a question they are usually the opposite — someone working
+ * out what happens if they decline is still deciding.
+ *
+ * Treating these as refusals regardless of phrasing meant "what happens if I
+ * don't upgrade?" permanently closed the conversation and recorded the person
+ * as having declined something they had only asked about. Declining is the one
+ * irreversible thing a user can do here, so it must never be inferred from a
+ * question.
+ */
+const SOFT_NEGATIVE = [
   /\blater\b/,
   /\bdon'?t\b/,
   /\bdo not\b/,
@@ -65,10 +84,17 @@ export function classifyIntent(message: string): Intent {
   const text = message.toLowerCase().trim();
   if (!text) return "unclear";
 
-  // Negatives are checked first so "no thanks, but how much is it?" stops at no.
-  if (NEGATIVE.some((re) => re.test(text))) return "negative";
+  const asksSomething =
+    text.includes("?") || QUESTION_WORDS.some((re) => re.test(text));
 
-  const asksSomething = text.includes("?") || QUESTION_WORDS.some((re) => re.test(text));
+  // An outright no ends it, question attached or not.
+  if (HARD_NEGATIVE.some((re) => re.test(text))) return "negative";
+
+  // A softer negation only counts as a refusal when it is not part of a
+  // question. "I don't want it" is a no; "what if I don't?" is a question.
+  if (SOFT_NEGATIVE.some((re) => re.test(text)) && !asksSomething) {
+    return "negative";
+  }
 
   // A yes attached to a question ("yes, but what do I lose?") is treated as a
   // question, not consent. The user gets an answer and another chance to agree.

@@ -40,6 +40,11 @@ export async function setConversationState(
  * Rule 2 depends on ordering, not just presence: consent only counts if it came
  * *after* the agent explained what it was asking for. A yes recorded before any
  * pitch existed is not consent to anything.
+ *
+ * It must also postdate the last order this conversation created. One yes
+ * authorises one checkout — otherwise a single agreement kept authorising new
+ * orders for the life of the conversation, so a failed payment could be
+ * followed by a fresh order the user never asked for.
  */
 export async function hasAffirmativeAfterSuggestion(
   conversationId: string,
@@ -55,27 +60,34 @@ export async function hasAffirmativeAfterSuggestion(
     .where(
       and(
         eq(agentEvents.conversationId, conversationId),
-        inArray(agentEvents.type, ["suggestion", "intent"]),
+        inArray(agentEvents.type, ["suggestion", "intent", "checkout_created"]),
       ),
     )
     .orderBy(agentEvents.createdAt, agentEvents.id);
 
-  let sawSuggestion = false;
+  let consentIsLive = false;
   for (const row of rows) {
-    if (row.type === "suggestion") {
-      sawSuggestion = true;
+    if (row.type === "suggestion") continue;
+
+    // Creating an order spends the consent that authorised it.
+    if (row.type === "checkout_created") {
+      consentIsLive = false;
       continue;
     }
-    if (
-      row.type === "intent" &&
-      sawSuggestion &&
-      (row.meta as { intent?: string } | null)?.intent === "affirmative"
-    ) {
-      return true;
+
+    const intent = (row.meta as { intent?: string } | null)?.intent;
+    if (intent === "affirmative") {
+      // Only counts once something has been explained to agree to.
+      consentIsLive = rows.some(
+        (r) =>
+          r.type === "suggestion" &&
+          (r.createdAt < row.createdAt ||
+            (r.createdAt.getTime() === row.createdAt.getTime() && r.id < row.id)),
+      );
     }
   }
 
-  return false;
+  return consentIsLive;
 }
 
 export async function transcript(

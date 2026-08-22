@@ -18,11 +18,6 @@ export function formatPaise(paise: number): string {
   }).format(rupees);
 }
 
-/** 49900 -> "499" ; 129950 -> "1,299.50" — no symbol, for grounding checks. */
-export function formatPaiseBare(paise: number): string {
-  return formatPaise(paise).replace(/[^\d.,]/g, "");
-}
-
 /** 49900 -> 499 ; used when we need the plain rupee number in text. */
 export function paiseToRupeeNumber(paise: number): number {
   return paise / 100;

@@ -28,6 +28,10 @@ export type UsageFacts = {
   recurringCount: number;
   recurringMonthlyTotalPaise: number;
   proPricePaise: number;
+  /** How many of this month's transactions the current plan will show. */
+  visibleTxnCap: number | null;
+  /** Whether the current plan reveals which charges recur, or only how many. */
+  showsRecurringDetail: boolean;
   freeFeatures: string[];
   proFeatures: string[];
   /** Feature strings Pro has that Free does not — the honest delta. */
@@ -71,6 +75,7 @@ export async function computeUsageFacts(user: User): Promise<UsageFacts> {
     (r) => r.occurredOn >= month.start && r.occurredOn < month.endExclusive,
   );
 
+  const current = user.plan === "pro" ? pro : free;
   const cap = free.txnCapPerMonth ?? 0;
   const txnCount = thisMonthRows.length;
   const recurring = detectRecurring(recentRows);
@@ -93,6 +98,8 @@ export async function computeUsageFacts(user: User): Promise<UsageFacts> {
       0,
     ),
     proPricePaise: pro.pricePaise,
+    visibleTxnCap: current.txnCapPerMonth,
+    showsRecurringDetail: current.recurringDetection,
     freeFeatures,
     proFeatures,
     proOnlyFeatures: proFeatures.filter((f) => !freeFeatures.includes(f)),

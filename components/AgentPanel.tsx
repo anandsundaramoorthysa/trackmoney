@@ -83,6 +83,7 @@ export function AgentPanel({
         }
 
         const history = await response.json();
+        if (history.checkout) setCheckout(history.checkout);
         if (Array.isArray(history.messages) && history.messages.length > 0) {
           setMessages(
             history.messages.map((m: HistoryMessage) => ({

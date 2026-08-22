@@ -1,9 +1,9 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { handleRouteError } from "@/lib/api-errors";
 import { db } from "@/lib/db";
-import { conversations } from "@/lib/db/schema";
+import { conversations, payments } from "@/lib/db/schema";
 import { getDemoUser } from "@/lib/demo";
 import {
   markPaymentFailed,
@@ -55,6 +55,23 @@ async function handlePOST(request: Request) {
     .orderBy(desc(conversations.createdAt))
     .limit(1);
 
+  const [payment] = await db
+    .select()
+    .from(payments)
+    .where(
+      and(eq(payments.razorpayOrderId, orderId), eq(payments.userId, user.id)),
+    )
+    .limit(1);
+
+  /**
+   * A payment started from the billing page has nothing to do with the agent,
+   * so attaching its outcome to the agent's conversation made the trail — and
+   * the chat panel, which replays conversation events — report the agent as
+   * having done something a person did alone.
+   */
+  const conversationIdFor = (row?: { initiatedBy: string }) =>
+    row?.initiatedBy === "agent" ? (conversation?.id ?? null) : null;
+
   const valid = verifyPaymentSignature({ orderId, paymentId, signature });
 
   if (!valid) {
@@ -63,7 +80,7 @@ async function handlePOST(request: Request) {
       orderId,
       paymentId,
       reason: "the payment signature did not verify against our key secret, so it was rejected.",
-      conversationId: conversation?.id ?? null,
+      conversationId: conversationIdFor(payment),
     });
 
     return NextResponse.json(
@@ -72,21 +89,38 @@ async function handlePOST(request: Request) {
     );
   }
 
-  const { amountPaise } = await markPaymentSuccessful({
+  const settlement = await markPaymentSuccessful({
     user,
     orderId,
     paymentId,
-    conversationId: conversation?.id ?? null,
+    conversationId: conversationIdFor(payment),
   });
 
-  if (conversation) {
+  if (!settlement.settled) {
+    return NextResponse.json(
+      {
+        verified: true,
+        settled: false,
+        error:
+          "That payment is valid but does not match any order on this account, so nothing was changed.",
+      },
+      { status: 409 },
+    );
+  }
+
+  if (conversation && payment?.initiatedBy === "agent") {
     await db
       .update(conversations)
       .set({ state: "converted" })
       .where(eq(conversations.id, conversation.id));
   }
 
-  return NextResponse.json({ verified: true, plan: "pro", amountPaise });
+  return NextResponse.json({
+    verified: true,
+    settled: true,
+    plan: "pro",
+    amountPaise: settlement.amountPaise,
+  });
 }
 
 export async function POST(request: Request) {

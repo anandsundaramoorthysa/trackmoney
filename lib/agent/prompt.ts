@@ -40,9 +40,18 @@ function factsBlock(facts: UsageFacts): string {
     `recurring_charges_detected: ${facts.recurringCount}`,
   ];
 
-  for (const c of facts.recurringCandidates) {
+  // Only a Pro account is told which charges recur. Handing the model the list
+  // for a Free account would let it give away, in the pitch, the very thing the
+  // pitch is selling.
+  if (facts.showsRecurringDetail) {
+    for (const c of facts.recurringCandidates) {
+      lines.push(
+        `  - ${c.merchant}, ${formatPaise(c.amountPaise)}, seen in ${c.monthsSeen} months`,
+      );
+    }
+  } else if (facts.recurringCount > 0) {
     lines.push(
-      `  - ${c.merchant}, ${formatPaise(c.amountPaise)}, seen in ${c.monthsSeen} months`,
+      "  (Free shows only the count. Do not name the merchants or their amounts.)",
     );
   }
 

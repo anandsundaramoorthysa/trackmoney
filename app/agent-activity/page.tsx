@@ -19,8 +19,15 @@ export default async function AgentActivityPage() {
     const events = await listAgentEvents(user.id);
 
     const refusals = events.filter((e) => e.type === "tool_refused").length;
+
+    // A reused order and a failed API call are not money actions — one is a
+    // deduplicated no-op and the other never reached Razorpay. Counting them
+    // made the rule that *prevents* extra money actions increment the
+    // money-action tally.
     const moneyActions = events.filter(
-      (e) => e.type === "checkout_created" || e.type === "checkout_result",
+      (e) =>
+        (e.type === "checkout_created" || e.type === "checkout_result") &&
+        (e.meta as { moneyMoved?: boolean } | null)?.moneyMoved !== false,
     ).length;
 
     return (
@@ -30,11 +37,14 @@ export default async function AgentActivityPage() {
             Agent activity
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-muted">
-            Every action the agent took, in order: what it noticed, what it said,
-            how the reply was read, what it created, and how the payment ended.
-            Expand a row to see the exact numbers it was given when it spoke —
-            that is what makes the wording checkable rather than merely
-            plausible.
+            Every money action on this account, newest first: what the agent
+            noticed, what it said, how the reply was read, what it created, what
+            it was refused, and how the payment ended. Payments started from the
+            Billing page appear here too, marked as yours rather than the
+            agent&apos;s — the point of the page is that both go through the same
+            gate. Expand a row to see the exact numbers the agent was given when
+            it spoke, which is what makes the wording checkable rather than
+            merely plausible.
           </p>
         </div>
 
@@ -49,7 +59,7 @@ export default async function AgentActivityPage() {
             Nothing yet. Open the dashboard and talk to the assistant.
           </p>
         ) : (
-          <ol className="overflow-hidden rounded-xl border border-line bg-surface">
+          <ul className="overflow-hidden rounded-xl border border-line bg-surface">
             {events.map((event) => (
               <li
                 key={event.id}
@@ -59,7 +69,8 @@ export default async function AgentActivityPage() {
                   <span className="font-mono text-xs text-muted tabular">
                     {formatTimestamp(event.createdAt)}
                   </span>
-                  <TypeBadge type={event.type} />
+                  <TypeBadge type={event.type} meta={event.meta} />
+                  <Initiator meta={event.meta} />
                 </div>
                 <p className="mt-1.5 text-sm">{event.explanation}</p>
 
@@ -78,7 +89,7 @@ export default async function AgentActivityPage() {
                 )}
               </li>
             ))}
-          </ol>
+          </ul>
         )}
       </div>
     );
@@ -118,12 +129,50 @@ const BADGE_STYLES: Record<AgentEventType, string> = {
   tool_refused: "bg-agent-tint text-bad",
 };
 
-function TypeBadge({ type }: { type: AgentEventType }) {
+/**
+ * The label has to describe what happened, not just which code path ran. A
+ * failed Orders API call is not a payment outcome, and reusing an open order is
+ * not a checkout being created.
+ */
+function labelFor(
+  type: AgentEventType,
+  meta: Record<string, unknown> | null,
+): string {
+  const outcome = (meta as { outcome?: string } | null)?.outcome;
+  if (outcome === "order_creation_failed") return "Order could not be created";
+  if (outcome === "unknown_order") return "Unrecognised payment";
+  if ((meta as { reused?: boolean } | null)?.reused === true) {
+    return "Existing order reused";
+  }
+  return EVENT_LABELS[type] ?? type;
+}
+
+function TypeBadge({
+  type,
+  meta,
+}: {
+  type: AgentEventType;
+  meta: Record<string, unknown> | null;
+}) {
   return (
     <span
       className={`rounded-full px-2 py-0.5 font-mono text-[11px] ${BADGE_STYLES[type] ?? "bg-brand-tint"}`}
     >
-      {EVENT_LABELS[type] ?? type}
+      {labelFor(type, meta)}
+    </span>
+  );
+}
+
+/** Who set this in motion — the agent, or a person clicking Billing. */
+function Initiator({ meta }: { meta: Record<string, unknown> | null }) {
+  const by = (meta as { initiatedBy?: string } | null)?.initiatedBy;
+  if (by !== "agent" && by !== "billing_page") return null;
+
+  return (
+    <span
+      className={`font-mono text-[11px] ${by === "agent" ? "text-agent" : "text-muted"}`}
+    >
+      {by === "agent" ? "started by the agent" : "started by you, on Billing"}
     </span>
   );
 }

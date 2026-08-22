@@ -34,8 +34,10 @@ Three layers, in order, in [`lib/facts.ts`](lib/facts.ts),
 2. The model receives that object and nothing else as factual input. It has no
    database access and is not asked to compute anything. Its job is wording.
 3. `checkGrounding()` then verifies that **every number in what the model wrote
-   exists in the facts object**. If one does not, the whole generation is thrown
-   away and a deterministic template is used instead.
+   exists in the facts object, in the unit the model was given it**. If one does
+   not, the whole generation is thrown away and a deterministic template is used
+   instead. Rupee figures only — admitting the paise original of the same amount
+   would have let "₹49,900" pass as grounded against a ₹499 order.
 
 So the agent's sentences are the model's; its numbers never are. A fabricated
 figure cannot reach the user, and cannot reach the audit trail.
@@ -56,7 +58,8 @@ tomorrow.
 | Exactly two tools exist | `lib/agent/run.ts` | A hallucinated tool name is refused and audited, not ignored |
 | Consent must already be recorded | `lib/agent/tools.ts` | The model cannot assert that you agreed |
 | One open order per user | `lib/razorpay.ts` | A retry loop cannot stack up orders |
-| Hard stop after a decline | `lib/agent/tools.ts` | No second pitch, no nagging |
+| Hard stop after a decline | `lib/agent/tools.ts`, `lib/agent/run.ts` | No second pitch, no nagging — in every tier, including templates |
+| One yes, one order | `lib/agent/conversation.ts` | Consent is spent when an order is created, so a failed payment cannot be silently retried |
 | Already on Pro | `lib/razorpay.ts` | Charging someone twice |
 
 Two of those live in `createProUpgradeOrder()` rather than in the agent, because
@@ -78,6 +81,11 @@ is not a yes. "Yes, but what do I lose on Free?" is a question, not consent. A
 false *unclear* costs one extra turn of conversation; a false *affirmative* would
 charge someone who did not agree.
 
+The same care applies to no. Declining is the one irreversible thing a user can
+do here, so it is never *inferred*: "what happens if I don't upgrade?" is a
+question, not a refusal, even though it contains "don't". An outright "no
+thanks" still ends it, question attached or not.
+
 **And there is a plain "Upgrade to Pro" button that has nothing to do with the
 agent.** That matters twice over. A real product always has a manual path, so an
 agent-only checkout would look staged. More importantly, the agent's tool calls
@@ -95,6 +103,13 @@ order it created, how the payment ended.
 
 Refusals are logged as loudly as successes. A bound nobody can watch being
 enforced is indistinguishable from a bound that does not exist.
+
+Payments you start yourself from the Billing page appear here too, labelled as
+yours rather than the agent's — that is the point of the page, since both go
+through the same function. The row labels describe what happened rather than
+which branch ran: a failed Orders API call is "Order could not be created", not
+a payment outcome, and neither it nor a deduplicated reuse counts toward the
+money-actions tally.
 
 ### One failure handled gracefully
 
@@ -145,9 +160,19 @@ deterministic templates and **the whole flow still works** — see *Demo-day
 resilience* below.
 
 ```bash
-npm run test:facts   # the deterministic layers
+npm test             # everything below, in order
+npm run test:facts        # deterministic layers, no database needed
+npm run test:integration  # the server against a real Postgres
+npm run test:e2e          # Playwright, against a production build
 npm run typecheck
 ```
+
+The integration and browser suites need a local Postgres. They point at
+`postgresql://postgres:postgres@127.0.0.1:5432/trackmoney_test` by default —
+override with `TEST_DATABASE_URL`. They rebuild that database from the committed
+migrations on every run and never touch your development data. Razorpay is
+replaced by a local stand-in that signs with the same secret, so signature
+verification is genuinely exercised rather than stubbed out.
 
 ### Test cards
 
@@ -163,7 +188,8 @@ Any future expiry, any CVV.
 ## Walkthrough
 
 1. **Dashboard** — a seeded account with 23 transactions this month against a
-   Free cap of 20, and three charges that repeat monthly.
+   Free cap of 20. Free shows the most recent 20 and tells you *how many* of
+   your charges recur; it does not tell you which.
 2. **The agent opens** with something specific to those numbers, not marketing
    copy. Ask it questions; it answers from the same facts.
 3. **Say yes** — it prepares a ₹499 test-mode order and hands you a button. It
@@ -171,7 +197,11 @@ Any future expiry, any CVV.
 4. **Or say no** — it stops, and stays stopped.
 5. **`/agent-activity`** — read back everything that happened, including
    anything it was refused.
-6. **Reset demo data** on the dashboard puts it all back for the next run.
+6. **What you actually bought** — Pro lifts the cap so the full month is
+   listed, names the recurring charges, and enables CSV export. The pitch quotes
+   the plan's feature list, so every line of it has to be something the account
+   gains.
+7. **Reset demo data** on the dashboard puts it all back for the next run.
 
 ---
 
@@ -249,6 +279,10 @@ Things this deliberately does not do, and why:
   to Track 3.
 - **Detection is a rule, not ML.** Same merchant, same amount, two or more
   distinct months. The judged intelligence is in the gating and the trail.
+- **The tracker is small, but what Pro sells is real.** The cap, the recurring
+  names and the CSV export all actually change when you pay. An upsell for
+  features that do not exist would undercut the one thing this project is
+  claiming: that the agent's explanations are true.
 - **The expense tracker is thin on purpose.** It exists so the agent has
   something real to reason about.
 

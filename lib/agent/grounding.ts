@@ -21,14 +21,19 @@ function normalise(token: string): string {
 }
 
 export function allowedNumberStrings(facts: UsageFacts): Set<string> {
+  // Rupee figures only, never the paise originals.
+  //
+  // The model is handed formatted rupees and never sees paise, so no honest
+  // generation contains 49900. Allowing it because the same quantity exists in
+  // the facts under a different unit was the difference between checking "this
+  // figure is supported" and checking "this integer appears somewhere" — and it
+  // let "₹49,900" be reported as grounded against a ₹499 order.
   const values: number[] = [
     facts.txnCountThisMonth,
     facts.freeTxnCap,
     facts.overCapBy,
     facts.recurringCount,
-    facts.proPricePaise,
     paiseToRupeeNumber(facts.proPricePaise),
-    facts.recurringMonthlyTotalPaise,
     paiseToRupeeNumber(facts.recurringMonthlyTotalPaise),
     facts.proFeatures.length,
     facts.freeFeatures.length,
@@ -41,7 +46,6 @@ export function allowedNumberStrings(facts: UsageFacts): Set<string> {
   ];
 
   for (const candidate of facts.recurringCandidates) {
-    values.push(candidate.amountPaise);
     values.push(paiseToRupeeNumber(candidate.amountPaise));
     values.push(candidate.monthsSeen);
   }
@@ -96,7 +100,9 @@ export function suggestionTemplate(facts: UsageFacts): string {
 
   if (facts.recurringCount > 0) {
     parts.push(
-      `I also see ${facts.recurringCount} charges that repeat at the same amount every month — ${listRecurring(facts)} — and Free does not detect those automatically.`,
+      facts.showsRecurringDetail
+        ? `I also see ${facts.recurringCount} charges that repeat at the same amount every month: ${listRecurring(facts)}.`
+        : `I can also see that ${facts.recurringCount} of your charges repeat at the same amount every month, though Free only tells you how many — not which ones.`,
     );
   }
 
@@ -112,10 +118,31 @@ export function answerTemplate(facts: UsageFacts): string {
   return [
     `Here is what I can tell you from your account: ${facts.txnCountThisMonth} transactions in ${facts.monthLabel}, against a Free cap of ${facts.freeTxnCap}.`,
     facts.recurringCount > 0
-      ? `${facts.recurringCount} of your charges repeat monthly (${listRecurring(facts)}).`
+      ? facts.showsRecurringDetail
+        ? `${facts.recurringCount} of your charges repeat monthly: ${listRecurring(facts)}.`
+        : `${facts.recurringCount} of your charges repeat monthly; Free shows the count but not which ones.`
       : "",
     `Pro costs ${formatPaise(facts.proPricePaise)} as a one-time unlock and adds: ${facts.proOnlyFeatures.join("; ")}.`,
     "Tell me yes if you want me to prepare the checkout, or no and I will leave it.",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+/**
+ * Answering a question from someone who has already said no.
+ *
+ * The ordinary answer template ends by offering to prepare the checkout, which
+ * in a declined conversation is exactly the nagging the decline rule exists to
+ * prevent. The facts are still answered; the offer is not repeated.
+ */
+export function declinedAnswerTemplate(facts: UsageFacts): string {
+  return [
+    `You have logged ${facts.txnCountThisMonth} transactions in ${facts.monthLabel}, against a Free cap of ${facts.freeTxnCap}.`,
+    facts.recurringCount > 0
+      ? `${facts.recurringCount} of your charges repeat monthly.`
+      : "",
+    "You told me you did not want the upgrade, so I will leave it there. The Billing page has it if you ever want it.",
   ]
     .filter(Boolean)
     .join(" ");

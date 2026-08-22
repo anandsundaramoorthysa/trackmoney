@@ -10,6 +10,7 @@ import {
   answerTemplate,
   checkGrounding,
   declineTemplate,
+  declinedAnswerTemplate,
   proAnswerTemplate,
   reopenAfterDeclineTemplate,
   suggestionTemplate,
@@ -262,10 +263,16 @@ export async function runAgentTurn(input: {
   const ctx: ToolContext = { user, conversation, facts };
   let checkout: CheckoutHandoff | null = null;
   let toolOutcome: AgentTurnResult["toolOutcome"] = "not_requested";
-  // An account that already pays has nothing to be sold, so its fallback
-  // wording must not end by offering the upgrade.
-  let deterministicReply =
-    user.plan === "pro" ? proAnswerTemplate(facts) : answerTemplate(facts);
+  // Neither an account that already pays nor one that has said no should be
+  // offered the upgrade again, so the fallback wording depends on both.
+  const fallbackAnswer = () =>
+    user.plan === "pro"
+      ? proAnswerTemplate(facts)
+      : conversation.state === "declined"
+        ? declinedAnswerTemplate(facts)
+        : answerTemplate(facts);
+
+  let deterministicReply = fallbackAnswer();
   let eventType: "suggestion" | "agent_reply" = "agent_reply";
   let modelReply = choice?.reply ?? null;
 
@@ -277,8 +284,12 @@ export async function runAgentTurn(input: {
       deterministicReply = suggestionTemplate(facts);
     } else {
       toolOutcome = "refused";
-      deterministicReply =
-        user.plan === "pro" ? proAnswerTemplate(facts) : answerTemplate(facts);
+      deterministicReply = fallbackAnswer();
+      // The tool was refused because the model tried to pitch when it must not,
+      // which means the wording it generated in the same breath IS that pitch.
+      // Blocking the state change while still delivering the sentence would
+      // enforce the rule on the bookkeeping and not on the user.
+      modelReply = null;
     }
   } else if (requested === "createCheckoutOrder") {
     const outcome = await runCreateCheckoutOrder(ctx);
@@ -297,6 +308,13 @@ export async function runAgentTurn(input: {
           : outcome.message;
       modelReply = null;
     }
+  }
+
+  // After a decline the agent speaks only in wording that has been checked not
+  // to re-open the sale. Grounding catches invented numbers, not renewed
+  // persuasion, so free-form generation is not used here at all.
+  if (conversation.state === "declined") {
+    modelReply = null;
   }
 
   const grounded = groundOrFallback(modelReply, deterministicReply, facts);

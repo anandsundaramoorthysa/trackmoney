@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 
 import { handleRouteError } from "@/lib/api-errors";
+import { and, desc, eq } from "drizzle-orm";
+
 import { listConversationEvents } from "@/lib/audit";
+import { db } from "@/lib/db";
+import { payments } from "@/lib/db/schema";
+import { RAZORPAY_CURRENCY, razorpayCredentials } from "@/lib/razorpay";
 import { getOrCreateConversation } from "@/lib/agent/conversation";
 import { runAgentTurn } from "@/lib/agent/run";
 import { getDemoUser } from "@/lib/demo";
@@ -41,11 +46,38 @@ async function handleGET() {
   const conversation = await getOrCreateConversation(user.id);
   const events = await listConversationEvents(conversation.id);
 
+  /**
+   * An order the agent prepared but nobody has paid yet. Without this the
+   * agent's "use the button below" message survived a reload while the button
+   * itself did not, stranding an open order.
+   */
+  const [open] = await db
+    .select()
+    .from(payments)
+    .where(
+      and(
+        eq(payments.userId, user.id),
+        eq(payments.status, "created"),
+        eq(payments.initiatedBy, "agent"),
+      ),
+    )
+    .orderBy(desc(payments.createdAt))
+    .limit(1);
+
   return NextResponse.json({
     conversationId: conversation.id,
     state: conversation.state,
     plan: user.plan,
     messages: toChatMessages(events),
+    checkout: open
+      ? {
+          orderId: open.razorpayOrderId,
+          amountPaise: open.amountPaise,
+          currency: RAZORPAY_CURRENCY,
+          keyId: razorpayCredentials().keyId,
+          reused: true,
+        }
+      : null,
   });
 }
 
