@@ -42,6 +42,12 @@ Three layers, in order, in [`lib/facts.ts`](lib/facts.ts),
 So the agent's sentences are the model's; its numbers never are. A fabricated
 figure cannot reach the user, and cannot reach the audit trail.
 
+Two limits, stated rather than implied: the check confirms a figure came from
+the facts, not that it was used for the right thing (3 is in the data as
+"transactions over the cap", so using it as a recurring count would pass), and
+it only inspects digits, not numbers spelled out in words. Both are narrow, both
+are asserted by tests, and both are cheaper to admit than to paper over.
+
 The trail stores both halves — the wording *and* the facts the agent was handed
 when it wrote it, in `agent_events.facts`. You can diff them.
 
