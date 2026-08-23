@@ -25,8 +25,14 @@ const TIMEOUT_MS = 12_000;
  */
 function config() {
   return {
-    groqModel: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
-    geminiModel: process.env.GEMINI_MODEL ?? "gemini-2.0-flash",
+    // Verified against both APIs on 2026-08-23. Hosted model catalogues retire
+    // names without warning, and a retired name fails the same way a network
+    // outage does — quietly, straight to the template tier — so the fallback
+    // looks healthy while no model has run at all. Both are overridable, and
+    // `npm run check:providers` re-verifies them.
+    groqModel: process.env.GROQ_MODEL ?? "openai/gpt-oss-20b",
+    // An alias rather than a pinned version, so this does not go stale again.
+    geminiModel: process.env.GEMINI_MODEL ?? "gemini-flash-latest",
     groqBase: process.env.GROQ_BASE_URL ?? "https://api.groq.com/openai/v1",
     geminiBase:
       process.env.GEMINI_BASE_URL ??

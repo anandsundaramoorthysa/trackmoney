@@ -160,12 +160,20 @@ npm run dev                  # http://localhost:3000
 | `RAZORPAY_KEY_SECRET` | |
 | `GROQ_API_KEY` | Optional |
 | `GEMINI_API_KEY` | Optional |
+| `GROQ_MODEL` | Optional override; defaults to a model verified to work |
+| `GEMINI_MODEL` | Optional override; defaults to `gemini-flash-latest` |
+
+Run **`npm run check:providers`** before a demo. Hosted model catalogues retire
+names without notice, and a retired name fails exactly the way an outage does —
+quietly, straight to the template tier — so the fallback looks healthy while no
+model has run at all.
 
 Both LLM keys are optional. With neither set the agent falls back to
 deterministic templates and **the whole flow still works** — see *Demo-day
 resilience* below.
 
 ```bash
+npm run check:providers   # does every external service actually answer?
 npm test             # everything below, in order
 npm run test:facts        # deterministic layers, no database needed
 npm run test:integration  # the server against a real Postgres

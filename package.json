@@ -16,7 +16,8 @@
     "test:facts": "tsx scripts/test-facts.ts",
     "test:integration": "tsx tests/integration.ts",
     "test": "npm run test:facts && npm run test:integration && npm run test:e2e",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "check:providers": "tsx scripts/check-providers.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
