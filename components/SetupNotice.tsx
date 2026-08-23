@@ -14,8 +14,8 @@ export function SetupNotice({ error }: { error: unknown }) {
           Razorpay <strong>test-mode</strong> keys.
         </li>
         <li>
-          Run <code className="font-mono">npm run db:push</code> to create the
-          tables.
+          Run <code className="font-mono">npm run db:migrate</code> to create
+          the tables.
         </li>
         <li>
           Run <code className="font-mono">npm run db:seed</code> to load the demo

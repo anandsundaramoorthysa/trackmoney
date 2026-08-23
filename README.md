@@ -146,7 +146,7 @@ npm install
 
 cp .env.example .env.local   # then fill it in
 
-npm run db:push              # create the tables
+npm run db:migrate           # create the tables from the committed migrations
 npm run db:seed              # load the demo account
 npm run dev                  # http://localhost:3000
 ```
@@ -155,7 +155,7 @@ npm run dev                  # http://localhost:3000
 
 | Variable | Notes |
 |---|---|
-| `DATABASE_URL` | Neon connection string |
+| `DATABASE_URL` | Neon connection string, including `?sslmode=require` |
 | `RAZORPAY_KEY_ID` | Must start with `rzp_test_`; the app refuses live keys |
 | `RAZORPAY_KEY_SECRET` | |
 | `GROQ_API_KEY` | Optional |
