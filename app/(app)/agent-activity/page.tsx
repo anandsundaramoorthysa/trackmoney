@@ -167,13 +167,22 @@ function TypeBadge({
 /** Who set this in motion — the agent, or a person clicking Billing. */
 function Initiator({ meta }: { meta: Record<string, unknown> | null }) {
   const by = (meta as { initiatedBy?: string } | null)?.initiatedBy;
-  if (by !== "agent" && by !== "billing_page") return null;
+  if (by !== "agent" && by !== "billing_page" && by !== "ai_buyer") return null;
+
+  const label =
+    by === "agent"
+      ? "started by the agent"
+      : by === "ai_buyer"
+        ? "started by an AI buyer, on your mandate"
+        : "started by you, on Billing";
 
   return (
     <span
-      className={`font-mono text-[11px] ${by === "agent" ? "text-agent" : "text-muted"}`}
+      className={`font-mono text-[11px] ${
+        by === "billing_page" ? "text-muted" : "text-agent"
+      }`}
     >
-      {by === "agent" ? "started by the agent" : "started by you, on Billing"}
+      {label}
     </span>
   );
 }

@@ -3,6 +3,7 @@ import { and, desc, eq, gte, lt } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { planConfig, transactions, type User } from "@/lib/db/schema";
 import { detectRecurring, type RecurringCandidate } from "@/lib/recurring";
+import { computeMonthInsights, FREE_CATEGORY_LIMIT } from "@/lib/insights";
 import { istMonthRange, shiftDays } from "@/lib/time";
 
 /**
@@ -29,6 +30,20 @@ export type UsageFacts = {
   recurringCandidates: RecurringCandidate[];
   recurringCount: number;
   recurringMonthlyTotalPaise: number;
+  totalSpentPaise: number;
+  previousTotalSpentPaise: number;
+  /**
+   * What the agent may discuss, already trimmed to the plan.
+   *
+   * Free sees three categories in the interface, so the agent is given three.
+   * Handing it the whole breakdown would let it answer, in conversation, a
+   * question the product charges to answer.
+   */
+  categories: {
+    category: string;
+    totalPaise: number;
+    changePaise: number;
+  }[];
   proPricePaise: number;
   /** How many of this month's transactions the current plan will show. */
   visibleTxnCap: number | null;
@@ -45,7 +60,9 @@ export async function computeUsageFacts(user: User): Promise<UsageFacts> {
   const month = istMonthRange();
   const lookbackStart = shiftDays(month.start, -120);
 
-  const [plans, recentRows] = await Promise.all([
+  const [insights, plansAndRows] = await Promise.all([
+    computeMonthInsights(user.id),
+    Promise.all([
     db.select().from(planConfig),
     db
       .select({
@@ -62,7 +79,9 @@ export async function computeUsageFacts(user: User): Promise<UsageFacts> {
         ),
       )
       .orderBy(desc(transactions.occurredOn)),
+    ]),
   ]);
+  const [plans, recentRows] = plansAndRows;
 
   const free = plans.find((p) => p.plan === "free");
   const pro = plans.find((p) => p.plan === "pro");
@@ -99,6 +118,16 @@ export async function computeUsageFacts(user: User): Promise<UsageFacts> {
       (sum, r) => sum + r.amountPaise,
       0,
     ),
+    totalSpentPaise: insights.totalPaise,
+    previousTotalSpentPaise: insights.previousTotalPaise,
+    categories: (user.plan === "pro"
+      ? insights.categories
+      : insights.categories.slice(0, FREE_CATEGORY_LIMIT)
+    ).map((row) => ({
+      category: row.category,
+      totalPaise: row.totalPaise,
+      changePaise: row.changePaise,
+    })),
     proPricePaise: pro.pricePaise,
     visibleTxnCap: current.txnCapPerMonth,
     showsRecurringDetail: current.recurringDetection,

@@ -53,6 +53,14 @@ const FACTS: UsageFacts = {
   ],
   recurringCount: 2,
   recurringMonthlyTotalPaise: 214_800,
+  totalSpentPaise: 214_800,
+  previousTotalSpentPaise: 200_000,
+  categories: [
+    // Non-zero on purpose: a zero change would put 0 into the allowed set and
+    // quietly weaken the "small numbers are checked too" case below.
+    { category: "Health", totalPaise: 149_900, changePaise: -5_000 },
+    { category: "Entertainment", totalPaise: 64_900, changePaise: 14_800 },
+  ],
   proPricePaise: 49_900,
   visibleTxnCap: 20,
   showsRecurringDetail: false,

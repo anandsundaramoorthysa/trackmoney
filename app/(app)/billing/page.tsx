@@ -6,11 +6,23 @@ import { db } from "@/lib/db";
 import { payments, planConfig } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth/guard";
 import { formatPaise } from "@/lib/money";
+import { issueMandateAction } from "@/lib/mandate-actions";
+import { MANDATE_TTL_MINUTES } from "@/lib/mandates";
 import { formatTimestamp } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
-export default async function BillingPage() {
+export default async function BillingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    mandate?: string;
+    expires?: string;
+    mandateError?: string;
+  }>;
+}) {
+  const { mandate, expires, mandateError } = await searchParams;
+
   try {
     const user = await requireUser();
     const plans = await db.select().from(planConfig);
@@ -57,6 +69,59 @@ export default async function BillingPage() {
           />
         </div>
 
+        <section className="rounded-xl border border-line bg-surface p-5">
+          <h2 className="text-sm font-semibold">Let an AI agent buy this</h2>
+          <p className="mt-1 max-w-2xl text-sm text-muted">
+            A purchase mandate is a one-time authorisation an AI buyer presents
+            instead of you clicking. It names one product, caps the amount at{" "}
+            {formatPaise(pro.pricePaise)}, expires in {MANDATE_TTL_MINUTES}{" "}
+            minutes, and is spent by the first order that uses it. It authorises
+            an <em>order</em>, never a payment: you still authorise that in
+            Razorpay&apos;s own checkout.
+          </p>
+
+          {mandateError && (
+            <p className="mt-3 rounded-lg border border-bad/30 bg-agent-tint px-3 py-2 text-sm text-bad">
+              {mandateError}
+            </p>
+          )}
+
+          {mandate ? (
+            <div className="mt-4 rounded-lg border border-agent/40 bg-agent-tint p-3">
+              <p className="text-xs text-muted">
+                Shown once. Expires{" "}
+                {expires ? formatTimestamp(new Date(expires)) : "shortly"}.
+              </p>
+              <p className="mt-1 break-all font-mono text-xs">{mandate}</p>
+            </div>
+          ) : (
+            user.plan === "free" && (
+              <form action={issueMandateAction} className="mt-4 flex flex-wrap gap-2">
+                <input
+                  name="purpose"
+                  placeholder="What is this agent buying for you?"
+                  maxLength={200}
+                  className="min-w-0 flex-1 rounded-lg border border-line bg-canvas px-3 py-2 text-sm outline-none focus:border-brand"
+                />
+                <button
+                  type="submit"
+                  className="rounded-lg border border-line px-4 py-2 text-sm font-medium transition-colors hover:bg-brand-tint"
+                >
+                  Issue a mandate
+                </button>
+              </form>
+            )
+          )}
+
+          <p className="mt-3 text-xs text-muted">
+            The machine-readable catalogue lives at{" "}
+            <a href="/api/catalog" className="text-brand hover:underline">
+              /api/catalog
+            </a>
+            .
+          </p>
+        </section>
+
         <section className="overflow-hidden rounded-xl border border-line bg-surface">
           <h2 className="border-b border-line px-4 py-3 text-sm font-semibold">
             Payment history
@@ -89,6 +154,8 @@ export default async function BillingPage() {
                       <td className="px-4 py-2">
                         {row.initiatedBy === "agent" ? (
                           <span className="text-agent">agent</span>
+                        ) : row.initiatedBy === "ai_buyer" ? (
+                          <span className="text-agent">AI buyer</span>
                         ) : (
                           <span className="text-muted">billing page</span>
                         )}

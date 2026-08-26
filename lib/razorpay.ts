@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 
 import { conversationForOrder, logAgentEvent } from "@/lib/audit";
 import { db } from "@/lib/db";
+import { isUniqueViolation } from "@/lib/db/errors";
 import { payments, planConfig, users, type User } from "@/lib/db/schema";
 import { formatPaise } from "@/lib/money";
 
@@ -105,7 +106,7 @@ export type CreateOrderResult =
 export async function createProUpgradeOrder(
   user: User,
   options: {
-    initiatedBy: "agent" | "billing_page";
+    initiatedBy: "agent" | "billing_page" | "ai_buyer";
     conversationId?: string | null;
   },
 ): Promise<CreateOrderResult> {
@@ -184,13 +185,64 @@ export async function createProUpgradeOrder(
       },
     });
 
-    await db.insert(payments).values({
-      userId: user.id,
-      razorpayOrderId: order.id,
-      amountPaise: pro.pricePaise,
-      status: "created",
-      initiatedBy: options.initiatedBy,
-    });
+    try {
+      await db.insert(payments).values({
+        userId: user.id,
+        razorpayOrderId: order.id,
+        amountPaise: pro.pricePaise,
+        status: "created",
+        initiatedBy: options.initiatedBy,
+      });
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+
+      /**
+       * Another request created an order between our check and our write.
+       *
+       * The database is the authority on "one open order", so the loser hands
+       * back the winner's order rather than a second one. The order we had
+       * just created at Razorpay is abandoned unpaid — recorded here rather
+       * than left silent, because an order nobody can reach is exactly the
+       * kind of thing an audit trail exists to show.
+       */
+      const [winner] = await db
+        .select()
+        .from(payments)
+        .where(and(eq(payments.userId, user.id), eq(payments.status, "created")))
+        .limit(1);
+
+      await logAgentEvent({
+        userId: user.id,
+        conversationId: options.conversationId ?? null,
+        type: "checkout_created",
+        explanation: `Two checkouts were requested at once. Kept ${winner?.razorpayOrderId ?? "the existing order"} and abandoned ${order.id}, which was never paid.`,
+        meta: {
+          rule: "one_open_order_per_user",
+          reused: true,
+          moneyMoved: false,
+          abandonedOrderId: order.id,
+          orderId: winner?.razorpayOrderId,
+          initiatedBy: options.initiatedBy,
+        },
+      });
+
+      if (!winner) {
+        return {
+          ok: false,
+          rule: "razorpay_error",
+          message: "Another checkout was already in progress.",
+        };
+      }
+
+      return {
+        ok: true,
+        orderId: winner.razorpayOrderId,
+        amountPaise: winner.amountPaise,
+        currency: RAZORPAY_CURRENCY,
+        keyId,
+        reused: true,
+      };
+    }
 
     await logAgentEvent({
       userId: user.id,

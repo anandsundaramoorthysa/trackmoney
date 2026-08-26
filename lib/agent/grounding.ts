@@ -35,6 +35,8 @@ export function allowedNumberStrings(facts: UsageFacts): Set<string> {
     facts.recurringCount,
     paiseToRupeeNumber(facts.proPricePaise),
     paiseToRupeeNumber(facts.recurringMonthlyTotalPaise),
+    paiseToRupeeNumber(facts.totalSpentPaise),
+    paiseToRupeeNumber(facts.previousTotalSpentPaise),
     facts.proFeatures.length,
     facts.freeFeatures.length,
     facts.proOnlyFeatures.length,
@@ -44,6 +46,11 @@ export function allowedNumberStrings(facts: UsageFacts): Set<string> {
   // Waving through 0-3 for "list phrasing" also waved through every wrong small
   // count — "2 of your charges repeat" passed the check while the facts said 3.
   // A count is exactly the kind of figure this is supposed to police.
+
+  for (const row of facts.categories) {
+    values.push(paiseToRupeeNumber(row.totalPaise));
+    values.push(paiseToRupeeNumber(Math.abs(row.changePaise)));
+  }
 
   for (const candidate of facts.recurringCandidates) {
     values.push(paiseToRupeeNumber(candidate.amountPaise));
@@ -118,6 +125,13 @@ export function suggestionTemplate(facts: UsageFacts): string {
   return parts.join(" ");
 }
 
+/** The biggest category, phrased as a fact rather than an opinion. */
+function topCategoryLine(facts: UsageFacts): string {
+  const top = facts.categories[0];
+  if (!top) return "";
+  return `Your largest category this month is ${top.category} at ${formatPaise(top.totalPaise)}.`;
+}
+
 export function answerTemplate(facts: UsageFacts): string {
   return [
     `Here is what I can tell you from your account: ${facts.txnCountThisMonth} transactions in ${facts.monthLabel}, against a Free cap of ${facts.freeTxnCap}, with ${facts.remainingOnFree} left.`,
@@ -126,6 +140,7 @@ export function answerTemplate(facts: UsageFacts): string {
         ? `${facts.recurringCount} of your charges repeat monthly: ${listRecurring(facts)}.`
         : `${facts.recurringCount} of your charges repeat monthly; Free shows the count but not which ones.`
       : "",
+    topCategoryLine(facts),
     `Pro costs ${formatPaise(facts.proPricePaise)} as a one-time unlock and adds: ${facts.proOnlyFeatures.join("; ")}.`,
     "Tell me yes if you want me to prepare the checkout, or no and I will leave it.",
   ]
@@ -165,6 +180,7 @@ export function proAnswerTemplate(facts: UsageFacts): string {
     facts.recurringCount > 0
       ? `I am tracking ${facts.recurringCount} recurring charges for you: ${listRecurring(facts)}.`
       : "I am not seeing any recurring charges yet.",
+    topCategoryLine(facts),
     "Ask me anything about your spending.",
   ].join(" ");
 }

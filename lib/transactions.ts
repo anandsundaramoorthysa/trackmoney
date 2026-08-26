@@ -2,6 +2,7 @@ import { and, count, eq, gte, lt } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { planConfig, transactions, type User } from "@/lib/db/schema";
+import { isUniqueViolation } from "@/lib/db/errors";
 import { transactionDedupKey } from "@/lib/dedup";
 import { istMonthRange } from "@/lib/time";
 
@@ -127,12 +128,6 @@ export async function deleteTransaction(
     .returning({ id: transactions.id });
 
   return removed.length > 0;
-}
-
-export function isUniqueViolation(error: unknown): boolean {
-  const code = (error as { code?: string; cause?: { code?: string } })?.code;
-  const causeCode = (error as { cause?: { code?: string } })?.cause?.code;
-  return code === "23505" || causeCode === "23505";
 }
 
 /** "1,299.50" or "1299.5" -> 129950. Rejects anything that is not a number. */

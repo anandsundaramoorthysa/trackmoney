@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   date,
@@ -8,6 +9,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -171,27 +173,78 @@ export const agentEvents = pgTable("agent_events", {
     .defaultNow(),
 });
 
-export const payments = pgTable("payments", {
+export const payments = pgTable(
+  "payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    razorpayOrderId: text("razorpay_order_id").notNull().unique(),
+    razorpayPaymentId: text("razorpay_payment_id"),
+    amountPaise: integer("amount_paise").notNull(),
+    status: text("status", { enum: ["created", "success", "failed"] })
+      .notNull()
+      .default("created"),
+    failureReason: text("failure_reason"),
+    /**
+     * Who set the money in motion. All three go through one function, which is
+     * the claim the audit trail exists to let someone verify.
+     */
+    initiatedBy: text("initiated_by", {
+      enum: ["agent", "billing_page", "ai_buyer"],
+    })
+      .notNull()
+      .default("billing_page"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    /**
+     * At most one unpaid order per account, enforced by the database.
+     *
+     * "One open order per user" was previously a read followed by a write,
+     * which two requests arriving together can both pass. A partial unique
+     * index makes the rule true rather than merely usually true, and the loser
+     * of the race is handed the winner's order.
+     */
+    uniqueIndex("payments_one_open_order_per_user")
+      .on(table.userId)
+      .where(sql`status = 'created'`),
+  ],
+);
+
+/**
+ * A purchase mandate — PLAN.md §10.5.
+ *
+ * The human-facing flow gates a money action on a person clicking. An AI buyer
+ * has no one to click, so the equivalent has to be issued in advance: a scoped,
+ * expiring, single-use authorisation naming what may be bought and the most it
+ * may cost. The token is stored only as a hash, like every other bearer
+ * credential here.
+ *
+ * This is the honest version of "agent-to-agent commerce": the buyer never
+ * gains authority of its own, it presents authority a person granted.
+ */
+export const purchaseMandates = pgTable("purchase_mandates", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  razorpayOrderId: text("razorpay_order_id").notNull().unique(),
-  razorpayPaymentId: text("razorpay_payment_id"),
-  amountPaise: integer("amount_paise").notNull(),
-  status: text("status", { enum: ["created", "success", "failed"] })
-    .notNull()
-    .default("created"),
-  failureReason: text("failure_reason"),
-  /** "agent" or "billing_page" — proves both paths hit the same function. */
-  initiatedBy: text("initiated_by", { enum: ["agent", "billing_page"] })
-    .notNull()
-    .default("billing_page"),
+  productId: text("product_id").notNull(),
+  maxAmountPaise: integer("max_amount_paise").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  /** Free text from the issuer, shown in the audit trail. */
+  purpose: text("purpose"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
 
+export type PurchaseMandate = typeof purchaseMandates.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
