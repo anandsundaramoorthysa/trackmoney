@@ -23,12 +23,16 @@ export default async function TransactionsPage({
     added?: string;
     deleted?: string;
     capped?: string;
+    imported?: string;
+    skipped?: string;
+    failed?: string;
   }>;
 }) {
   const user = await requireUser();
   const facts = await computeUsageFacts(user);
   const month = istMonthRange();
-  const { error, added, deleted, capped } = await searchParams;
+  const { error, added, deleted, capped, imported, skipped, failed } =
+    await searchParams;
 
   const rows = await db
     .select()
@@ -49,13 +53,21 @@ export default async function TransactionsPage({
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
         <h1 className="text-2xl font-semibold tracking-[-0.02em]">Transactions</h1>
         <p className="mt-1 text-sm text-muted">
           {month.label} · {facts.txnCountThisMonth} logged
           {user.plan === "free" &&
             ` · ${facts.remainingOnFree} of ${facts.freeTxnCap} left on Free`}
         </p>
+        </div>
+        <Link
+          href="/transactions/import"
+          className="rounded-lg border border-line px-3 py-2 text-sm transition-colors hover:bg-brand-tint"
+        >
+          Import CSV{user.plan === "free" ? " (Pro)" : ""}
+        </Link>
       </div>
 
       {capped && (
@@ -87,6 +99,13 @@ export default async function TransactionsPage({
       {deleted && (
         <p className="rounded-lg border border-line bg-brand-tint px-4 py-3 text-sm">
           Transaction deleted.
+        </p>
+      )}
+      {imported !== undefined && (
+        <p className="rounded-lg border border-line bg-brand-tint px-4 py-3 text-sm">
+          {imported} imported
+          {Number(skipped ?? 0) > 0 && `, ${skipped} skipped as duplicates`}
+          {Number(failed ?? 0) > 0 && `, ${failed} could not be read`}.
         </p>
       )}
 

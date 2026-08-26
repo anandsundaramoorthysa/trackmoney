@@ -5,6 +5,12 @@ import { classifyIntent } from "@/lib/agent/intent";
 import type { UsageFacts } from "@/lib/facts";
 import { formatPaise } from "@/lib/money";
 import { csvCell } from "@/lib/csv";
+import {
+  normaliseDate,
+  parseAmountToPaise,
+  parseCsv,
+  parseTransactionsCsv,
+} from "@/lib/csv-import";
 import { detectRecurring } from "@/lib/recurring";
 
 /**
@@ -234,6 +240,62 @@ test("neutralises the other formula lead characters", () => {
 });
 test("leaves ordinary values alone", () => {
   assert.equal(csvCell("Netflix India"), "Netflix India");
+});
+
+console.log("\nreading a statement");
+test("splits quoted fields and doubled quotes", () => {
+  const rows = parseCsv('a,b\n"x, y","he said ""hi"""');
+  assert.deepEqual(rows[1], ["x, y", 'he said "hi"']);
+});
+test("reads dates day-first, as Indian exports write them", () => {
+  assert.equal(normaliseDate("03/04/2026"), "2026-04-03");
+  assert.equal(normaliseDate("3-4-26"), "2026-04-03");
+  assert.equal(normaliseDate("2026-04-03"), "2026-04-03");
+});
+test("refuses a date it cannot read", () => {
+  assert.equal(normaliseDate("not a date"), null);
+  assert.equal(normaliseDate("45/13/2026"), null);
+});
+test("parses amounts with symbols, commas and brackets", () => {
+  assert.equal(parseAmountToPaise("₹1,299.50"), 129_950);
+  assert.equal(parseAmountToPaise("(249)"), -24_900);
+  assert.equal(parseAmountToPaise("abc"), null);
+});
+test("detects date, description and amount columns", () => {
+  const result = parseTransactionsCsv(
+    "Date,Narration,Amount\n01/08/2026,Swiggy,249.50\n02/08/2026,Uber,120",
+  );
+  assert.equal(result.problem, null);
+  assert.equal(result.rows.length, 2);
+  assert.deepEqual(result.rows[0], {
+    occurredOn: "2026-08-01",
+    merchant: "Swiggy",
+    category: "Other",
+    amountPaise: 24_950,
+  });
+});
+test("uses the debit column and leaves credits out", () => {
+  const result = parseTransactionsCsv(
+    "Date,Details,Debit,Credit\n01/08/2026,Swiggy,249.50,\n02/08/2026,Salary,,50000",
+  );
+  assert.equal(result.rows.length, 1, "a credit is money in, not spending");
+  assert.equal(result.rows[0].merchant, "Swiggy");
+  assert.equal(result.ignored, 1);
+});
+test("treats a negative single amount as spending, not a refund", () => {
+  const result = parseTransactionsCsv("Date,Payee,Amount\n01/08/2026,Zomato,-499");
+  assert.equal(result.rows[0].amountPaise, 49_900);
+});
+test("keeps a category the file supplies, and falls back otherwise", () => {
+  const result = parseTransactionsCsv(
+    "Date,Payee,Amount,Category\n01/08/2026,Zomato,499,Food & Drink\n02/08/2026,X,10,Nonsense",
+  );
+  assert.equal(result.rows[0].category, "Food & Drink");
+  assert.equal(result.rows[1].category, "Other");
+});
+test("says what is wrong when the columns are unrecognisable", () => {
+  const result = parseTransactionsCsv("Foo,Bar\n1,2");
+  assert.match(result.problem ?? "", /date column/i);
 });
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

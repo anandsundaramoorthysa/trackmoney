@@ -159,9 +159,9 @@ export async function seedDatabase(): Promise<SeedSummary> {
       recurringDetection: false,
       pricePaise: 0,
       features: [
-        `Shows your most recent ${FREE_TXN_CAP} transactions each month`,
+        `Up to ${FREE_TXN_CAP} transactions a month`,
         "Counts how many charges look recurring",
-        "Monthly spend summary",
+        "Your top 3 spending categories",
       ],
     },
     {
@@ -171,9 +171,10 @@ export async function seedDatabase(): Promise<SeedSummary> {
       recurringDetection: true,
       pricePaise: PRO_PRICE_PAISE,
       features: [
-        "Shows every transaction in the month, with no cap",
+        "Unlimited transactions a month",
         "Names the recurring charges it finds, not just the count",
-        "Monthly spend summary",
+        "Every spending category, with the change against last month",
+        "Import a statement from CSV",
         "CSV export of the month's transactions",
       ],
     },

@@ -4,10 +4,11 @@
 
 **Razorpay AI Buildathon — Track 1: AI Growth & Agentic Commerce**
 
-TrackMoney is a small expense tracker that sells its own Pro upgrade. An agent
-notices something true about your account, explains it in your own numbers, asks,
-and — only if you say yes — prepares a Razorpay test-mode order that you then
-authorise yourself.
+TrackMoney is a small expense tracker that sells its own Pro upgrade. You sign
+in, log what you spend, and hit the Free plan's limit — at which point an agent
+notices something true about your account, explains it in your own numbers,
+asks, and — only if you say yes — prepares a Razorpay test-mode order that you
+then authorise yourself.
 
 The interesting part is not that an agent can sell you something. It is what the
 agent is *not allowed* to do, and the fact that you can read every one of those
