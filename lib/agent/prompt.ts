@@ -35,7 +35,8 @@ function factsBlock(facts: UsageFacts): string {
     `month: ${facts.monthLabel}`,
     `transactions_this_month: ${facts.txnCountThisMonth}`,
     `free_plan_transaction_cap: ${facts.freeTxnCap}`,
-    `over_cap_by: ${facts.overCapBy}`,
+    `transactions_left_on_free: ${facts.remainingOnFree}`,
+    `free_plan_will_refuse_the_next_one: ${facts.atCap}`,
     `pro_price: ${formatPaise(facts.proPricePaise)} (one-time)`,
     `recurring_charges_detected: ${facts.recurringCount}`,
   ];

@@ -9,7 +9,7 @@ import { payments } from "@/lib/db/schema";
 import { RAZORPAY_CURRENCY, razorpayCredentials } from "@/lib/razorpay";
 import { getOrCreateConversation } from "@/lib/agent/conversation";
 import { runAgentTurn } from "@/lib/agent/run";
-import { getDemoUser } from "@/lib/demo";
+import { getAuthenticatedUser } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,7 +42,7 @@ function toChatMessages(events: ChatEvent[]) {
 
 /** Returns the conversation as the audit trail already recorded it. */
 async function handleGET() {
-  const user = await getDemoUser();
+  const user = await getAuthenticatedUser();
   const conversation = await getOrCreateConversation(user.id);
   const events = await listConversationEvents(conversation.id);
 
@@ -93,7 +93,7 @@ async function handleGET() {
 }
 
 async function handlePOST(request: Request) {
-  const user = await getDemoUser();
+  const user = await getAuthenticatedUser();
 
   let body: { kind?: string; message?: string };
   try {

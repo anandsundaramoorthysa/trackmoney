@@ -1,11 +1,13 @@
 import {
   boolean,
   date,
+  index,
   integer,
   jsonb,
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -23,27 +25,89 @@ export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
+  /**
+   * scrypt, salted per user, formatted "scrypt$<salt-hex>$<hash-hex>".
+   * Null only for the seeded demo account, which is entered by a button
+   * rather than a password.
+   */
+  passwordHash: text("password_hash"),
   plan: text("plan", { enum: ["free", "pro"] })
     .notNull()
     .default("free"),
+  /** Throttling. A wrong password costs the attacker time, not us. */
+  failedLogins: integer("failed_logins").notNull().default(0),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
 
-export const transactions = pgTable("transactions", {
+/**
+ * Only the *hash* of a session token is stored.
+ *
+ * The token itself exists in one place — the user's cookie — so a database
+ * leak reveals no usable sessions. Same reasoning as password hashing, applied
+ * to the credential that actually rides on every request.
+ */
+export const sessions = pgTable("sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  merchant: text("merchant").notNull(),
-  category: text("category").notNull(),
-  amountPaise: integer("amount_paise").notNull(),
-  occurredOn: date("occurred_on").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
+
+/** Hashed, single-use, and dead 15 minutes after it is issued. */
+export const passwordResets = pgTable("password_resets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const transactions = pgTable(
+  "transactions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    merchant: text("merchant").notNull(),
+    category: text("category").notNull(),
+    amountPaise: integer("amount_paise").notNull(),
+    occurredOn: date("occurred_on").notNull(),
+    /**
+     * Content fingerprint of owner + day + amount + normalised merchant.
+     *
+     * Re-importing a statement that overlaps an earlier one is the normal case,
+     * not the exceptional one, so the same charge must not land twice. The
+     * uniqueness is enforced by the index below rather than by a check in the
+     * import code: a rule the database keeps cannot be bypassed by a second
+     * code path that forgets to ask.
+     */
+    dedupKey: text("dedup_key").notNull(),
+    source: text("source", { enum: ["manual", "import", "seed"] })
+      .notNull()
+      .default("manual"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique("transactions_user_dedup_key").on(table.userId, table.dedupKey),
+    index("transactions_user_month_idx").on(table.userId, table.occurredOn),
+  ],
+);
 
 /**
  * Plan limits and pricing live here as data, never as constants in components
@@ -129,6 +193,7 @@ export const payments = pgTable("payments", {
 });
 
 export type User = typeof users.$inferSelect;
+export type Session = typeof sessions.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
 export type PlanConfig = typeof planConfig.$inferSelect;
 export type Conversation = typeof conversations.$inferSelect;

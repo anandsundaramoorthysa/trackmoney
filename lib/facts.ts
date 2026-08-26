@@ -22,8 +22,10 @@ export type UsageFacts = {
   monthLabel: string;
   txnCountThisMonth: number;
   freeTxnCap: number;
-  overCapBy: number;
-  isOverCap: boolean;
+  /** How many more this month's plan will accept. Zero once the cap is hit. */
+  remainingOnFree: number;
+  /** True when the Free plan will refuse the next transaction. */
+  atCap: boolean;
   recurringCandidates: RecurringCandidate[];
   recurringCount: number;
   recurringMonthlyTotalPaise: number;
@@ -89,8 +91,8 @@ export async function computeUsageFacts(user: User): Promise<UsageFacts> {
     monthLabel: month.label,
     txnCountThisMonth: txnCount,
     freeTxnCap: cap,
-    overCapBy: Math.max(0, txnCount - cap),
-    isOverCap: txnCount > cap,
+    remainingOnFree: Math.max(0, cap - txnCount),
+    atCap: txnCount >= cap,
     recurringCandidates: recurring,
     recurringCount: recurring.length,
     recurringMonthlyTotalPaise: recurring.reduce(
@@ -108,11 +110,14 @@ export async function computeUsageFacts(user: User): Promise<UsageFacts> {
 }
 
 /**
- * Is there anything honest to pitch? If the account is not over the cap and has
- * no undetected recurring charges, the agent has no case to make and must not
- * invent one.
+ * Is there anything honest to pitch?
+ *
+ * The cap is now enforced, so an account can sit *at* it but never past it.
+ * Reaching it — or being one away — is a real event worth mentioning; so is
+ * having recurring charges Free will not name. Anything else and the agent has
+ * no case to make and must not invent one.
  */
 export function hasUpgradeCase(facts: UsageFacts): boolean {
   if (facts.currentPlan === "pro") return false;
-  return facts.isOverCap || facts.recurringCount > 0;
+  return facts.atCap || facts.remainingOnFree <= 1 || facts.recurringCount > 0;
 }

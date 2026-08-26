@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { handleRouteError } from "@/lib/api-errors";
-import { getDemoUser } from "@/lib/demo";
+import { getAuthenticatedUser } from "@/lib/auth/session";
 import { markPaymentFailed } from "@/lib/razorpay";
 
 export const runtime = "nodejs";
@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
  * visible in the audit trail as a success would be.
  */
 async function handlePOST(request: Request) {
-  const user = await getDemoUser();
+  const user = await getAuthenticatedUser();
 
   let body: { orderId?: string; paymentId?: string; reason?: string };
   try {

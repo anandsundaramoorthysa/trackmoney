@@ -5,7 +5,7 @@ import { handleRouteError } from "@/lib/api-errors";
 import { csvRow } from "@/lib/csv";
 import { db } from "@/lib/db";
 import { transactions } from "@/lib/db/schema";
-import { getDemoUser } from "@/lib/demo";
+import { getAuthenticatedUser } from "@/lib/auth/session";
 import { paiseToRupeeNumber } from "@/lib/money";
 import { istMonthRange } from "@/lib/time";
 
@@ -24,7 +24,7 @@ export const dynamic = "force-dynamic";
  * convert paise.
  */
 async function handleGET() {
-  const user = await getDemoUser();
+  const user = await getAuthenticatedUser();
 
   if (user.plan !== "pro") {
     return NextResponse.json(

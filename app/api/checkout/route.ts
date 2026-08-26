@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { handleRouteError } from "@/lib/api-errors";
-import { getDemoUser } from "@/lib/demo";
+import { getAuthenticatedUser } from "@/lib/auth/session";
 import { createProUpgradeOrder } from "@/lib/razorpay";
 
 export const runtime = "nodejs";
@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
  * It also takes no userId — the account comes from server context.
  */
 async function handlePOST() {
-  const user = await getDemoUser();
+  const user = await getAuthenticatedUser();
 
   const result = await createProUpgradeOrder(user, {
     initiatedBy: "billing_page",

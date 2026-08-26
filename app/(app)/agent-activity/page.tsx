@@ -1,7 +1,7 @@
 import { SetupNotice } from "@/components/SetupNotice";
 import { EVENT_LABELS, listAgentEvents } from "@/lib/audit";
 import type { AgentEventType } from "@/lib/db/schema";
-import { getDemoUser } from "@/lib/demo";
+import { requireUser } from "@/lib/auth/guard";
 import { formatTimestamp } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function AgentActivityPage() {
   try {
-    const user = await getDemoUser();
+    const user = await requireUser();
     const events = await listAgentEvents(user.id);
 
     const refusals = events.filter((e) => e.type === "tool_refused").length;

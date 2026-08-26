@@ -8,6 +8,7 @@ import {
   users,
 } from "@/lib/db/schema";
 import { DEMO_USER_EMAIL, DEMO_USER_NAME } from "@/lib/demo";
+import { transactionDedupKey } from "@/lib/dedup";
 import { isoDate, istYearMonth } from "@/lib/time";
 
 /**
@@ -38,7 +39,14 @@ type Spend = {
   day: number;
 };
 
-/** One-off spending. Amounts are distinct so nothing is recurring by accident. */
+/**
+ * One-off spending. Amounts are distinct so nothing is recurring by accident.
+ *
+ * Sized so the seeded month lands on 19 of the Free plan's 20. A judge adds the
+ * twentieth themselves and is refused the twenty-first, which is a far better
+ * demonstration of the limit than being shown an account that had already
+ * exceeded it — and it stops the product contradicting its own rule.
+ */
 const CURRENT_MONTH_ONE_OFFS: Spend[] = [
   { merchant: "BigBasket", category: "Groceries", amountPaise: 2_84_700, day: 1 },
   { merchant: "Namma Metro", category: "Transport", amountPaise: 6_000, day: 2 },
@@ -54,11 +62,7 @@ const CURRENT_MONTH_ONE_OFFS: Spend[] = [
   { merchant: "Airtel Postpaid", category: "Utilities", amountPaise: 79_900, day: 15 },
   { merchant: "Blinkit", category: "Groceries", amountPaise: 31_250, day: 16 },
   { merchant: "PVR Cinemas", category: "Entertainment", amountPaise: 88_000, day: 17 },
-  { merchant: "Uber", category: "Transport", amountPaise: 19_400, day: 18 },
   { merchant: "Swiggy Instamart", category: "Groceries", amountPaise: 74_600, day: 19 },
-  { merchant: "Nykaa", category: "Shopping", amountPaise: 1_34_500, day: 20 },
-  { merchant: "Bookmyshow", category: "Entertainment", amountPaise: 45_000, day: 20 },
-  { merchant: "Chai Point", category: "Food & Drink", amountPaise: 14_000, day: 21 },
   { merchant: "Amazon.in", category: "Shopping", amountPaise: 3_49_000, day: 21 },
 ];
 
@@ -94,6 +98,11 @@ function daysInMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
+function currentMonthPrefix(): string {
+  const { year, month } = istYearMonth();
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
 function istDayOfMonth(): number {
   return new Date(Date.now() + (5 * 60 + 30) * 60_000).getUTCDate();
 }
@@ -108,13 +117,23 @@ function buildMonth(
   // For the current month, nothing may be dated in the future.
   const maxDay = clampToToday ? istDayOfMonth() : daysInMonth(year, month);
 
-  return spends.map((s) => ({
-    userId,
-    merchant: s.merchant,
-    category: s.category,
-    amountPaise: s.amountPaise,
-    occurredOn: isoDate(year, month, Math.max(1, Math.min(s.day, maxDay))),
-  }));
+  return spends.map((s) => {
+    const occurredOn = isoDate(year, month, Math.max(1, Math.min(s.day, maxDay)));
+    return {
+      userId,
+      merchant: s.merchant,
+      category: s.category,
+      amountPaise: s.amountPaise,
+      occurredOn,
+      source: "seed" as const,
+      dedupKey: transactionDedupKey({
+        userId,
+        occurredOn,
+        amountPaise: s.amountPaise,
+        merchant: s.merchant,
+      }),
+    };
+  });
 }
 
 export type SeedSummary = {
@@ -192,11 +211,23 @@ export async function seedDatabase(): Promise<SeedSummary> {
     }),
   ];
 
-  await db.insert(transactions).values(rows);
+  // The seed can collide with itself when the current month is clamped to an
+  // early day, since two spends then share a date. Dropping duplicates here
+  // keeps the seed honest about what a unique index would allow.
+  const seen = new Set<string>();
+  const unique = rows.filter((r) => {
+    if (seen.has(r.dedupKey)) return false;
+    seen.add(r.dedupKey);
+    return true;
+  });
+
+  await db.insert(transactions).values(unique);
 
   return {
     userId: user.id,
-    transactionsInserted: rows.length,
-    transactionsThisMonth: RECURRING.length + CURRENT_MONTH_ONE_OFFS.length,
+    transactionsInserted: unique.length,
+    transactionsThisMonth: unique.filter((r) =>
+      r.occurredOn.startsWith(currentMonthPrefix()),
+    ).length,
   };
 }

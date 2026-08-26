@@ -5,7 +5,7 @@ import { handleRouteError } from "@/lib/api-errors";
 import { conversationForOrder } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { conversations } from "@/lib/db/schema";
-import { getDemoUser } from "@/lib/demo";
+import { getAuthenticatedUser } from "@/lib/auth/session";
 import {
   markPaymentFailed,
   markPaymentSuccessful,
@@ -24,7 +24,7 @@ export const dynamic = "force-dynamic";
  * payment, not swallowed.
  */
 async function handlePOST(request: Request) {
-  const user = await getDemoUser();
+  const user = await getAuthenticatedUser();
 
   let body: {
     razorpay_order_id?: string;

@@ -5,7 +5,7 @@ import { ResetDemoButton } from "@/components/ResetDemoButton";
 import { SetupNotice } from "@/components/SetupNotice";
 import { db } from "@/lib/db";
 import { transactions } from "@/lib/db/schema";
-import { getDemoUser } from "@/lib/demo";
+import { requireUser } from "@/lib/auth/guard";
 import { computeUsageFacts } from "@/lib/facts";
 import { formatPaise } from "@/lib/money";
 import { istMonthRange } from "@/lib/time";
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   try {
-    const user = await getDemoUser();
+    const user = await requireUser();
     const facts = await computeUsageFacts(user);
     const month = istMonthRange();
 
@@ -62,9 +62,15 @@ export default async function DashboardPage() {
                 sub={
                   user.plan === "pro"
                     ? "no cap on Pro"
-                    : `of ${facts.freeTxnCap} on Free`
+                    : `of ${facts.freeTxnCap} on Free · ${facts.remainingOnFree} left`
                 }
-                tone={user.plan === "free" && facts.isOverCap ? "bad" : "plain"}
+                tone={
+                  user.plan === "free" && facts.atCap
+                    ? "bad"
+                    : user.plan === "free" && facts.remainingOnFree <= 3
+                      ? "agent"
+                      : "plain"
+                }
               />
               <Stat label="Spent" value={formatPaise(spent)} sub="this month" />
               <Stat
@@ -79,10 +85,10 @@ export default async function DashboardPage() {
               />
             </div>
 
-            {user.plan === "free" && facts.isOverCap && (
+            {user.plan === "free" && facts.atCap && (
               <p className="rounded-lg border border-line bg-agent-tint px-4 py-3 text-sm">
-                This account is {facts.overCapBy} transactions over the Free cap
-                of {facts.freeTxnCap} for {month.label}.
+                You have used all {facts.freeTxnCap} Free transactions for{" "}
+                {month.label}. The next one will not be saved until you upgrade.
               </p>
             )}
 

@@ -4,7 +4,7 @@ import { SetupNotice } from "@/components/SetupNotice";
 import { UpgradeButton } from "@/components/UpgradeButton";
 import { db } from "@/lib/db";
 import { payments, planConfig } from "@/lib/db/schema";
-import { getDemoUser } from "@/lib/demo";
+import { requireUser } from "@/lib/auth/guard";
 import { formatPaise } from "@/lib/money";
 import { formatTimestamp } from "@/lib/time";
 
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function BillingPage() {
   try {
-    const user = await getDemoUser();
+    const user = await requireUser();
     const plans = await db.select().from(planConfig);
     const free = plans.find((p) => p.plan === "free")!;
     const pro = plans.find((p) => p.plan === "pro")!;

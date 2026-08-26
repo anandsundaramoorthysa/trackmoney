@@ -17,6 +17,10 @@ export function handleRouteError(error: unknown): NextResponse {
   const message =
     error instanceof Error ? error.message : "Something went wrong.";
 
+  if (message === "Not signed in.") {
+    return NextResponse.json({ error: message }, { status: 401 });
+  }
+
   if (SETUP_HINTS.some((hint) => message.includes(hint))) {
     return NextResponse.json(
       { error: message, setupRequired: true },

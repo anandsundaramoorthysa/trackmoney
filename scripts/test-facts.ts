@@ -35,10 +35,12 @@ const FACTS: UsageFacts = {
   userName: "Ananya Rao",
   currentPlan: "free",
   monthLabel: "August 2026",
-  txnCountThisMonth: 23,
+  // Internally consistent: the cap is enforced, so a count can approach it but
+  // never pass it. 19 of 20 leaves 1, which is also the trigger the agent uses.
+  txnCountThisMonth: 19,
   freeTxnCap: 20,
-  overCapBy: 3,
-  isOverCap: true,
+  remainingOnFree: 1,
+  atCap: false,
   recurringCandidates: [
     { merchant: "Cult.fit", amountPaise: 149_900, monthsSeen: 3 },
     { merchant: "Netflix India", amountPaise: 64_900, monthsSeen: 3 },
@@ -118,14 +120,14 @@ test("the deterministic template is self-consistent", () => {
 });
 test("accepts wording that only uses facts", () => {
   const check = checkGrounding(
-    "You logged 23 transactions in August 2026, 3 over the cap of 20. Pro is ₹499.",
+    "You logged 19 transactions in August 2026, 1 short of the cap of 20. Pro is ₹499.",
     FACTS,
   );
   assert.equal(check.ok, true, `offending: ${check.offending.join(", ")}`);
 });
 test("rejects an invented figure", () => {
   const check = checkGrounding(
-    "You logged 23 transactions and could save ₹4,200 a year.",
+    "You logged 19 transactions and could save ₹4,200 a year.",
     FACTS,
   );
   assert.equal(check.ok, false);
@@ -194,8 +196,13 @@ test("rejects a small number the facts do not contain", () => {
   const check = checkGrounding("0 of your charges repeat every month.", FACTS);
   assert.equal(check.ok, false, "a small number passed without support");
 });
+test("the at-cap template is self-consistent too", () => {
+  const atCap = { ...FACTS, txnCountThisMonth: 20, remainingOnFree: 0, atCap: true };
+  const check = checkGrounding(suggestionTemplate(atCap), atCap);
+  assert.equal(check.ok, true, `offending: ${check.offending.join(", ")}`);
+});
 test("cannot tell which fact a number refers to — a known limit", () => {
-  // 3 is in the facts as overCapBy, so using it as a recurring count passes.
+  // 3 is in the facts as monthsSeen, so using it as a recurring count passes.
   // The check verifies a figure came from the data, not that it was used for
   // the right thing. Asserting the limit so nobody mistakes it for a guarantee.
   const check = checkGrounding("3 of your charges repeat every month.", FACTS);

@@ -31,7 +31,7 @@ export function allowedNumberStrings(facts: UsageFacts): Set<string> {
   const values: number[] = [
     facts.txnCountThisMonth,
     facts.freeTxnCap,
-    facts.overCapBy,
+    facts.remainingOnFree,
     facts.recurringCount,
     paiseToRupeeNumber(facts.proPricePaise),
     paiseToRupeeNumber(facts.recurringMonthlyTotalPaise),
@@ -88,9 +88,13 @@ function listRecurring(facts: UsageFacts): string {
 export function suggestionTemplate(facts: UsageFacts): string {
   const parts: string[] = [];
 
-  if (facts.isOverCap) {
+  if (facts.atCap) {
     parts.push(
-      `You have logged ${facts.txnCountThisMonth} transactions in ${facts.monthLabel}, which is ${facts.overCapBy} over the Free plan's cap of ${facts.freeTxnCap}.`,
+      `You have used all ${facts.freeTxnCap} of your Free transactions for ${facts.monthLabel}, so the next one will not be saved.`,
+    );
+  } else if (facts.remainingOnFree <= 1) {
+    parts.push(
+      `You have logged ${facts.txnCountThisMonth} transactions in ${facts.monthLabel}, leaving ${facts.remainingOnFree} before the Free plan's cap of ${facts.freeTxnCap}.`,
     );
   } else {
     parts.push(
@@ -116,7 +120,7 @@ export function suggestionTemplate(facts: UsageFacts): string {
 
 export function answerTemplate(facts: UsageFacts): string {
   return [
-    `Here is what I can tell you from your account: ${facts.txnCountThisMonth} transactions in ${facts.monthLabel}, against a Free cap of ${facts.freeTxnCap}.`,
+    `Here is what I can tell you from your account: ${facts.txnCountThisMonth} transactions in ${facts.monthLabel}, against a Free cap of ${facts.freeTxnCap}, with ${facts.remainingOnFree} left.`,
     facts.recurringCount > 0
       ? facts.showsRecurringDetail
         ? `${facts.recurringCount} of your charges repeat monthly: ${listRecurring(facts)}.`
