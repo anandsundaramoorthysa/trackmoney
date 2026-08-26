@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { planConfig } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { issueMandate } from "@/lib/mandates";
+import { MANDATE_COOKIE, stashOnce } from "@/lib/one-time-cookie";
 
 /**
  * Granting an AI buyer permission to purchase, once, up to a limit.
@@ -40,9 +41,9 @@ export async function issueMandateAction(form: FormData): Promise<void> {
     purpose: purpose || "Issued from the billing page",
   });
 
-  redirect(
-    `/billing?mandate=${encodeURIComponent(token)}&expires=${encodeURIComponent(
-      expiresAt.toISOString(),
-    )}`,
-  );
+  // The token never travels in the URL: it would outlive its 30 minutes in
+  // browser history and in any log that records query strings.
+  await stashOnce(MANDATE_COOKIE, token);
+
+  redirect(`/billing?issued=1&expires=${encodeURIComponent(expiresAt.toISOString())}`);
 }

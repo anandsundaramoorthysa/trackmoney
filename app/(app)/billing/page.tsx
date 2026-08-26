@@ -8,6 +8,7 @@ import { requireUser } from "@/lib/auth/guard";
 import { formatPaise } from "@/lib/money";
 import { issueMandateAction } from "@/lib/mandate-actions";
 import { MANDATE_TTL_MINUTES } from "@/lib/mandates";
+import { MANDATE_COOKIE, readOnce } from "@/lib/one-time-cookie";
 import { formatTimestamp } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -16,12 +17,15 @@ export default async function BillingPage({
   searchParams,
 }: {
   searchParams: Promise<{
-    mandate?: string;
+    issued?: string;
     expires?: string;
     mandateError?: string;
   }>;
 }) {
-  const { mandate, expires, mandateError } = await searchParams;
+  const { issued, expires, mandateError } = await searchParams;
+  // A mandate is a bearer credential, so it is handed over by a short
+  // httpOnly cookie rather than written into the URL and the access log.
+  const mandate = issued ? await readOnce(MANDATE_COOKIE) : null;
 
   try {
     const user = await requireUser();

@@ -4,16 +4,20 @@ import { Field, FormMessage, SubmitButton } from "@/components/auth/Field";
 import { requestResetAction } from "@/lib/auth/actions";
 import { requireGuest } from "@/lib/auth/guard";
 import { RESET_TTL_MINUTES } from "@/lib/auth/reset";
+import { RESET_CODE_COOKIE, readOnce } from "@/lib/one-time-cookie";
 
 export const dynamic = "force-dynamic";
 
 export default async function ForgotPasswordPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; sent?: string; code?: string }>;
+  searchParams: Promise<{ error?: string; sent?: string }>;
 }) {
   await requireGuest();
-  const { error, sent, code } = await searchParams;
+  const { error, sent } = await searchParams;
+  // Carried by a short httpOnly cookie rather than the URL — see
+  // lib/one-time-cookie.ts for why.
+  const code = sent ? await readOnce(RESET_CODE_COOKIE) : null;
 
   if (sent) {
     return (
@@ -37,7 +41,7 @@ export default async function ForgotPasswordPage({
             </p>
             <p className="mt-1 break-all font-mono text-xs">{code}</p>
             <Link
-              href={`/reset-password?token=${encodeURIComponent(code)}`}
+              href="/reset-password"
               className="mt-2 inline-block text-sm text-brand hover:underline"
             >
               Continue to set a new password

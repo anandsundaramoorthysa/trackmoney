@@ -19,6 +19,11 @@ import {
   recentResetCount,
   RESET_TTL_MINUTES,
 } from "./reset";
+import {
+  RESET_CODE_COOKIE,
+  clearOnce,
+  stashOnce,
+} from "@/lib/one-time-cookie";
 import { createSession, destroyAllSessions, destroySession } from "./session";
 
 /**
@@ -170,18 +175,29 @@ export async function requestResetAction(form: FormData): Promise<void> {
 
   const token = await issueResetToken(user.id);
 
-  // No mail provider in this demo, so the code is surfaced once, here, with the
-  // production path stated plainly rather than pretended.
-  redirect(`/forgot-password?sent=1&code=${encodeURIComponent(token)}`);
+  /**
+   * No mail provider in this demo, so the code is surfaced once — but through a
+   * short httpOnly cookie rather than the URL. A reset code grants an account,
+   * and a query string is a permanent record of a fifteen-minute secret.
+   *
+   * In production the code only ever reaches the person by email; the query
+   * parameter the reset page still accepts is what such a link would carry.
+   */
+  await stashOnce(RESET_CODE_COOKIE, token);
+  redirect("/forgot-password?sent=1");
 }
 
 export async function resetPasswordAction(form: FormData): Promise<void> {
   const token = String(form.get("token") ?? "").trim();
   const password = String(form.get("password") ?? "");
-  const back = `/reset-password?token=${encodeURIComponent(token)}`;
 
   const problem = assessPassword(password);
-  if (problem) fail(back, problem, "");
+  if (problem) {
+    // Keep the code in the cookie and out of the redirect, so a rejected
+    // password does not put a live reset token into the URL bar.
+    await stashOnce(RESET_CODE_COOKIE, token);
+    fail("/reset-password", problem);
+  }
 
   const lookup = await lookupResetToken(token);
   if (!lookup.valid) {
@@ -204,6 +220,7 @@ export async function resetPasswordAction(form: FormData): Promise<void> {
     .where(eq(users.id, lookup.userId));
 
   await consumeResetToken(lookup.resetId);
+  await clearOnce(RESET_CODE_COOKIE);
 
   // A reset is also how someone recovers a compromised account, so every
   // existing session is revoked rather than left running.
