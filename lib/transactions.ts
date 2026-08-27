@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { planConfig, transactions, type User } from "@/lib/db/schema";
 import { isUniqueViolation } from "@/lib/db/errors";
 import { transactionDedupKey } from "@/lib/dedup";
-import { istMonthRange } from "@/lib/time";
+import { istMonthRange, istToday } from "@/lib/time";
 
 /**
  * Writing a transaction — PLAN.md §10.3.
@@ -26,9 +26,18 @@ export const CATEGORIES = [
   "Other",
 ] as const;
 
+/**
+ * The largest amount the column can hold.
+ *
+ * `amount_paise` is a Postgres integer, so anything past this overflows and the
+ * driver throws — which reached the user as a 500 rather than as a refusal. A
+ * limit the product has is a limit the product should state.
+ */
+export const MAX_AMOUNT_PAISE = 2_147_483_647;
+
 export type AddResult =
   | { ok: true; id: string }
-  | { ok: false; reason: "cap_reached"; cap: number }
+  | { ok: false; reason: "cap_reached"; cap: number; month: string }
   | { ok: false; reason: "duplicate" }
   | { ok: false; reason: "invalid"; message: string };
 
@@ -42,15 +51,36 @@ async function planLimitFor(user: User): Promise<number | null> {
 }
 
 export async function countThisMonth(userId: string): Promise<number> {
-  const month = istMonthRange();
+  return countInMonth(userId, istMonthRange().start);
+}
+
+/**
+ * How many transactions an account has in the calendar month containing `day`.
+ *
+ * The cap has to be counted against the month a transaction *belongs to*, not
+ * the month it happens to be entered in. Counting only the current month meant
+ * a Free account could add any number of back-dated rows: the limit guarded one
+ * month and left every other one wide open.
+ */
+export async function countInMonth(
+  userId: string,
+  day: string,
+): Promise<number> {
+  const start = `${day.slice(0, 7)}-01`;
+  const [year, month] = start.split("-").map(Number);
+  const endExclusive =
+    month === 12
+      ? `${year + 1}-01-01`
+      : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+
   const [row] = await db
     .select({ total: count() })
     .from(transactions)
     .where(
       and(
         eq(transactions.userId, userId),
-        gte(transactions.occurredOn, month.start),
-        lt(transactions.occurredOn, month.endExclusive),
+        gte(transactions.occurredOn, start),
+        lt(transactions.occurredOn, endExclusive),
       ),
     );
   return row?.total ?? 0;
@@ -73,19 +103,31 @@ export async function addTransaction(
   if (!Number.isInteger(input.amountPaise) || input.amountPaise <= 0) {
     return { ok: false, reason: "invalid", message: "Enter an amount above zero." };
   }
+  if (input.amountPaise > MAX_AMOUNT_PAISE) {
+    return {
+      ok: false,
+      reason: "invalid",
+      message: "That amount is larger than this app can record.",
+    };
+  }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.occurredOn)) {
     return { ok: false, reason: "invalid", message: "Enter a valid date." };
   }
 
-  const month = istMonthRange();
-  const withinThisMonth =
-    input.occurredOn >= month.start && input.occurredOn < month.endExclusive;
+  if (input.occurredOn > istToday()) {
+    return { ok: false, reason: "invalid", message: "That date is in the future." };
+  }
 
-  // The cap counts the month a transaction belongs to, not the month it was
-  // typed in — otherwise back-dating would be a way around it.
+  // Counted against the month the transaction belongs to, so a back-dated row
+  // is limited by its own month rather than escaping the cap entirely.
   const cap = await planLimitFor(user);
-  if (cap !== null && withinThisMonth && (await countThisMonth(user.id)) >= cap) {
-    return { ok: false, reason: "cap_reached", cap };
+  if (cap !== null && (await countInMonth(user.id, input.occurredOn)) >= cap) {
+    return {
+      ok: false,
+      reason: "cap_reached",
+      cap,
+      month: input.occurredOn.slice(0, 7),
+    };
   }
 
   const dedupKey = transactionDedupKey({
@@ -134,5 +176,9 @@ export async function deleteTransaction(
 export function rupeesToPaise(value: string): number | null {
   const cleaned = value.replace(/[₹,\s]/g, "");
   if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
-  return Math.round(Number(cleaned) * 100);
+
+  // Bounded here too, so a caller that formats its own message still cannot
+  // hand the database a value it has no room for.
+  const paise = Math.round(Number(cleaned) * 100);
+  return paise > MAX_AMOUNT_PAISE ? null : paise;
 }

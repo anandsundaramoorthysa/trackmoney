@@ -1,3 +1,5 @@
+import { eq } from "drizzle-orm";
+
 import { db } from "@/lib/db";
 import {
   agentEvents,
@@ -193,12 +195,19 @@ export async function seedDatabase(): Promise<SeedSummary> {
     })
     .returning();
 
-  // Order matters: agent_events and payments reference the user, conversations
-  // cascade into agent_events.
-  await db.delete(agentEvents);
-  await db.delete(payments);
-  await db.delete(conversations);
-  await db.delete(transactions);
+  /**
+   * Scoped to the demo account, and it must stay that way.
+   *
+   * These deletes used to be unqualified, which was harmless while there was
+   * one account and destructive the moment sign-up existed: the reset button
+   * sits on a dashboard anyone can reach, so a visitor could wipe every other
+   * account's transactions, payments and history while their user row stayed
+   * behind looking intact.
+   */
+  await db.delete(agentEvents).where(eq(agentEvents.userId, user.id));
+  await db.delete(payments).where(eq(payments.userId, user.id));
+  await db.delete(conversations).where(eq(conversations.userId, user.id));
+  await db.delete(transactions).where(eq(transactions.userId, user.id));
 
   const rows = [
     ...buildMonth(user.id, 0, [...RECURRING, ...CURRENT_MONTH_ONE_OFFS], {

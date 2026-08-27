@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 import { cookies, headers } from "next/headers";
 
 /**
@@ -12,17 +14,23 @@ import { cookies, headers } from "next/headers";
  * without either of those. It is scoped to this origin, unreadable by page
  * scripts, and gone in two minutes.
  *
- * Note the deliberate limitation: Next.js only allows cookies to be written
- * from a server action or route handler, never during a render, so the page
- * that displays the value cannot clear it. The short lifetime is what bounds
- * the exposure instead.
+ * Next.js only allows cookies to be written from a server action or route
+ * handler, never during a render, so the page that displays a value cannot
+ * clear it afterwards. A nonce closes the gap that leaves: the action returns
+ * one, the page must present the matching nonce to read the value, and a cookie
+ * left over from an earlier request therefore reveals nothing.
+ *
+ * That gap was real. Asking to reset an address that had never signed up
+ * displayed the *previous* request's live reset code, because the page read the
+ * cookie whenever the URL said a code had been sent.
  */
 
 const TTL_SECONDS = 120;
 
-export async function stashOnce(name: string, value: string): Promise<void> {
+export async function stashOnce(name: string, value: string): Promise<string> {
+  const nonce = crypto.randomBytes(9).toString("base64url");
   const jar = await cookies();
-  jar.set(name, value, {
+  jar.set(name, JSON.stringify({ n: nonce, v: value }), {
     httpOnly: true,
     sameSite: "lax",
     secure:
@@ -32,11 +40,26 @@ export async function stashOnce(name: string, value: string): Promise<void> {
     path: "/",
     maxAge: TTL_SECONDS,
   });
+
+  return nonce;
 }
 
-export async function readOnce(name: string): Promise<string | null> {
-  const jar = await cookies();
-  return jar.get(name)?.value ?? null;
+/** Returns the stashed value only to a caller holding the matching nonce. */
+export async function readOnce(
+  name: string,
+  nonce: string | undefined,
+): Promise<string | null> {
+  if (!nonce) return null;
+
+  const raw = (await cookies()).get(name)?.value;
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as { n?: string; v?: string };
+    return parsed.n === nonce ? (parsed.v ?? null) : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function clearOnce(name: string): Promise<void> {

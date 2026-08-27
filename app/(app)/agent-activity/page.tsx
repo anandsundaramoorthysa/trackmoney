@@ -6,6 +6,9 @@ import { formatTimestamp } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
+/** How many rows the page shows before it admits there are more. */
+const TRAIL_LIMIT = 200;
+
 /**
  * The audit trail — PLAN.md §2 step 7.
  *
@@ -16,7 +19,11 @@ export const dynamic = "force-dynamic";
 export default async function AgentActivityPage() {
   try {
     const user = await requireUser();
-    const events = await listAgentEvents(user.id);
+    // One more than shown, so the page can say when it is not showing all of it
+    // rather than quietly starting halfway through the story.
+    const fetched = await listAgentEvents(user.id, TRAIL_LIMIT + 1);
+    const truncated = fetched.length > TRAIL_LIMIT;
+    const events = truncated ? fetched.slice(0, TRAIL_LIMIT) : fetched;
 
     const refusals = events.filter((e) => e.type === "tool_refused").length;
 
@@ -90,6 +97,13 @@ export default async function AgentActivityPage() {
               </li>
             ))}
           </ul>
+        )}
+
+        {truncated && (
+          <p className="text-xs text-muted">
+            Showing the most recent {TRAIL_LIMIT} events. Older ones are still
+            recorded — reset the demo data to start a clean trail.
+          </p>
         )}
       </div>
     );

@@ -42,8 +42,13 @@ export async function issueMandateAction(form: FormData): Promise<void> {
   });
 
   // The token never travels in the URL: it would outlive its 30 minutes in
-  // browser history and in any log that records query strings.
-  await stashOnce(MANDATE_COOKIE, token);
+  // browser history and in any log that records query strings. What does travel
+  // is a nonce, which is worthless on its own.
+  const nonce = await stashOnce(MANDATE_COOKIE, token);
 
-  redirect(`/billing?issued=1&expires=${encodeURIComponent(expiresAt.toISOString())}`);
+  redirect(
+    `/billing?issued=${encodeURIComponent(nonce)}&expires=${encodeURIComponent(
+      expiresAt.toISOString(),
+    )}`,
+  );
 }

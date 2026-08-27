@@ -15,9 +15,14 @@ export default async function ForgotPasswordPage({
 }) {
   await requireGuest();
   const { error, sent } = await searchParams;
-  // Carried by a short httpOnly cookie rather than the URL — see
-  // lib/one-time-cookie.ts for why.
-  const code = sent ? await readOnce(RESET_CODE_COOKIE) : null;
+
+  /**
+   * `sent` is a nonce, not a flag. The code itself is in a short httpOnly
+   * cookie, and only a request carrying the matching nonce can read it — so an
+   * address that was issued nothing sees nothing, even if the browser is still
+   * holding someone else's code from a minute ago.
+   */
+  const code = await readOnce(RESET_CODE_COOKIE, sent);
 
   if (sent) {
     return (
@@ -41,7 +46,7 @@ export default async function ForgotPasswordPage({
             </p>
             <p className="mt-1 break-all font-mono text-xs">{code}</p>
             <Link
-              href="/reset-password"
+              href={`/reset-password?code=${encodeURIComponent(sent ?? "")}`}
               className="mt-2 inline-block text-sm text-brand hover:underline"
             >
               Continue to set a new password

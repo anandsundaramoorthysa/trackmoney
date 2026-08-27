@@ -96,12 +96,18 @@ export async function signInAction(form: FormData): Promise<void> {
     fail("/login", "Email or password is incorrect.");
   }
 
-  if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+  const lockedNow =
+    user.lockedUntil !== null && user.lockedUntil.getTime() > Date.now();
+  if (lockedNow) {
     fail("/login", `Too many attempts. Try again in ${LOCKOUT_MINUTES} minutes.`);
   }
 
   if (!(await verifyPassword(password, user.passwordHash))) {
-    const failures = user.failedLogins + 1;
+    // A lock that has run out starts the count again. Carrying the old tally
+    // forward meant one wrong password after the wait re-locked immediately,
+    // so a fifteen-minute lockout was effectively permanent.
+    const previous = user.lockedUntil === null ? user.failedLogins : 0;
+    const failures = previous + 1;
     await db
       .update(users)
       .set({
@@ -163,14 +169,25 @@ export async function requestResetAction(form: FormData): Promise<void> {
     .where(eq(users.email, email))
     .limit(1);
 
-  // Always the same answer. Telling a stranger whether an address is
-  // registered is a disclosure the reset flow has no reason to make.
+  /**
+   * Always the same answer, whatever is true of the address.
+   *
+   * `?sent=1` carries no nonce, so the confirmation page can read nothing out
+   * of the cookie — including a code issued moments earlier for a different
+   * address, which it used to display as though it belonged to this one.
+   *
+   * The work is roughly matched too: the unknown path pays for one hash so the
+   * two do not differ by an obvious margin.
+   */
   if (!user || !user.passwordHash) {
+    await burnPasswordTime(email);
     redirect("/forgot-password?sent=1");
   }
 
+  // Over the limit answers exactly like an unknown address. Saying "too many
+  // requests" only to registered addresses told an attacker which ones exist.
   if ((await recentResetCount(user.id)) >= 3) {
-    fail("/forgot-password", "Too many reset requests. Try again later.");
+    redirect("/forgot-password?sent=1");
   }
 
   const token = await issueResetToken(user.id);
@@ -183,8 +200,8 @@ export async function requestResetAction(form: FormData): Promise<void> {
    * In production the code only ever reaches the person by email; the query
    * parameter the reset page still accepts is what such a link would carry.
    */
-  await stashOnce(RESET_CODE_COOKIE, token);
-  redirect("/forgot-password?sent=1");
+  const nonce = await stashOnce(RESET_CODE_COOKIE, token);
+  redirect(`/forgot-password?sent=${encodeURIComponent(nonce)}`);
 }
 
 export async function resetPasswordAction(form: FormData): Promise<void> {
@@ -195,8 +212,10 @@ export async function resetPasswordAction(form: FormData): Promise<void> {
   if (problem) {
     // Keep the code in the cookie and out of the redirect, so a rejected
     // password does not put a live reset token into the URL bar.
-    await stashOnce(RESET_CODE_COOKIE, token);
-    fail("/reset-password", problem);
+    const nonce = await stashOnce(RESET_CODE_COOKIE, token);
+    redirect(
+      `/reset-password?code=${encodeURIComponent(nonce)}&error=${encodeURIComponent(problem)}`,
+    );
   }
 
   const lookup = await lookupResetToken(token);

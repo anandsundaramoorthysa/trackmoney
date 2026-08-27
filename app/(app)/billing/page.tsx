@@ -23,9 +23,10 @@ export default async function BillingPage({
   }>;
 }) {
   const { issued, expires, mandateError } = await searchParams;
-  // A mandate is a bearer credential, so it is handed over by a short
-  // httpOnly cookie rather than written into the URL and the access log.
-  const mandate = issued ? await readOnce(MANDATE_COOKIE) : null;
+  // A mandate is a bearer credential, so it is handed over by a short httpOnly
+  // cookie rather than written into the URL and the access log. `issued` is the
+  // nonce that unlocks it, so revisiting this page later shows nothing.
+  const mandate = await readOnce(MANDATE_COOKIE, issued);
 
   try {
     const user = await requireUser();

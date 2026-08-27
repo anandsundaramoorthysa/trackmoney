@@ -11,17 +11,17 @@ export const dynamic = "force-dynamic";
 export default async function ResetPasswordPage({
   searchParams,
 }: {
-  searchParams: Promise<{ token?: string; error?: string }>;
+  searchParams: Promise<{ token?: string; code?: string; error?: string }>;
 }) {
   await requireGuest();
-  const { token: fromLink, error } = await searchParams;
+  const { token: fromLink, code: nonce, error } = await searchParams;
 
   /**
    * The cookie is this demo's channel; the query parameter is what a real
    * emailed reset link would carry. Both are accepted, and neither is generated
    * into a URL by this application.
    */
-  const token = (await readOnce(RESET_CODE_COOKIE)) ?? fromLink;
+  const token = (await readOnce(RESET_CODE_COOKIE, nonce)) ?? fromLink;
 
   if (!token) {
     return (
