@@ -59,3 +59,9 @@ export function formatTimestamp(value: Date): string {
     timeZone: "Asia/Kolkata",
   }).format(value);
 }
+
+/** Today, in IST — the same clock the month boundaries use. */
+export function istToday(now: Date = new Date()): string {
+  const ist = new Date(now.getTime() + IST_OFFSET_MINUTES * 60_000);
+  return isoDate(ist.getUTCFullYear(), ist.getUTCMonth() + 1, ist.getUTCDate());
+}

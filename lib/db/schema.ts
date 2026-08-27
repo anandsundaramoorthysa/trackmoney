@@ -244,6 +244,28 @@ export const purchaseMandates = pgTable("purchase_mandates", {
     .defaultNow(),
 });
 
+/**
+ * A parsed statement, held between the preview and the commit.
+ *
+ * The rows used to travel in the URL between those two steps, which worked
+ * until someone imported a real statement: three hundred rows encode to about
+ * 28 KB, and Node rejects a request line over 16 KB outright. Keeping them here
+ * and putting only an id in the URL also means the commit reads what was
+ * actually parsed rather than what the form posted back.
+ */
+export const importBatches = pgTable("import_batches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  rows: jsonb("rows").$type<unknown[]>().notNull(),
+  ignoredCount: integer("ignored_count").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type ImportBatch = typeof importBatches.$inferSelect;
 export type PurchaseMandate = typeof purchaseMandates.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;

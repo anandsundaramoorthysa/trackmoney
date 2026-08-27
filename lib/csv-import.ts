@@ -106,6 +106,20 @@ function findColumn(headers: string[], pattern: RegExp): number {
   return headers.findIndex((h) => pattern.test(h.toLowerCase()));
 }
 
+/**
+ * Find a money column, ignoring anything that is plainly a date.
+ *
+ * Indian bank statements routinely carry a "Value Date" column, and matching
+ * "value" against it picked the date as the amount: every row then failed to
+ * parse and the whole file came back as "no spending rows found". A column
+ * cannot be both.
+ */
+function findAmountColumn(headers: string[], pattern: RegExp): number {
+  return headers.findIndex(
+    (h) => pattern.test(h.toLowerCase()) && !/date/.test(h.toLowerCase()),
+  );
+}
+
 function normaliseCategory(value: string | undefined): string {
   const match = CATEGORIES.find(
     (c) => c.toLowerCase() === (value ?? "").trim().toLowerCase(),
@@ -130,9 +144,9 @@ export function parseTransactionsCsv(text: string): ParseResult {
     headers,
     /merchant|desc|narration|details|particular|remark|payee|name/,
   );
-  const amountAt = findColumn(headers, /^amount|amount$|value|spent/);
-  const debitAt = findColumn(headers, /debit|withdraw|outflow/);
-  const creditAt = findColumn(headers, /credit|deposit|inflow/);
+  const amountAt = findAmountColumn(headers, /amount|amt|value|spent/);
+  const debitAt = findAmountColumn(headers, /debit|withdraw|outflow/);
+  const creditAt = findAmountColumn(headers, /credit|deposit|inflow/);
   const categoryAt = findColumn(headers, /category|type of expense/);
 
   if (dateAt < 0 || (amountAt < 0 && debitAt < 0)) {

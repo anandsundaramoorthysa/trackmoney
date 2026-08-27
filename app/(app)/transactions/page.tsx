@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { transactions } from "@/lib/db/schema";
 import { computeUsageFacts } from "@/lib/facts";
 import { formatPaise } from "@/lib/money";
-import { istMonthRange } from "@/lib/time";
+import { istMonthRange, istToday } from "@/lib/time";
 import { CATEGORIES } from "@/lib/transactions";
 import {
   addTransactionAction,
@@ -49,7 +49,10 @@ export default async function TransactionsPage({
   const visible =
     facts.visibleTxnCap === null ? rows : rows.slice(0, facts.visibleTxnCap);
   const hidden = rows.length - visible.length;
-  const today = month.start.slice(0, 8) + String(new Date().getDate()).padStart(2, "0");
+  // The server's own clock is UTC in production, so composing a date from it
+  // put the form a day behind for anyone adding a transaction late in the
+  // evening IST — against a month boundary that is computed in IST.
+  const today = istToday();
 
   return (
     <div className="space-y-6">

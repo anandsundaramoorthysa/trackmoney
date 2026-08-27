@@ -5,7 +5,7 @@ import { handleRouteError } from "@/lib/api-errors";
 import { logAgentEvent } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { planConfig, users } from "@/lib/db/schema";
-import { checkMandate, consumeMandate } from "@/lib/mandates";
+import { checkMandate, consumeMandate, releaseMandate } from "@/lib/mandates";
 import { formatPaise } from "@/lib/money";
 import { createProUpgradeOrder } from "@/lib/razorpay";
 
@@ -118,6 +118,13 @@ async function handlePOST(request: Request) {
   const result = await createProUpgradeOrder(buyer, { initiatedBy: "ai_buyer" });
 
   if (!result.ok) {
+    // The order never happened, so the authorisation was not used. Only give it
+    // back for a transport failure — an account already on Pro is a settled
+    // answer, not a retryable one.
+    if (result.rule !== "already_pro") {
+      await releaseMandate(check.mandate.id);
+    }
+
     return NextResponse.json(
       { error: result.message, refusedBecause: result.rule },
       { status: result.rule === "already_pro" ? 409 : 502 },

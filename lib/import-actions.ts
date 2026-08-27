@@ -1,26 +1,16 @@
 "use server";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, lt } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth/guard";
-import { db } from "@/lib/db";
-import { transactions } from "@/lib/db/schema";
-import { transactionDedupKey } from "@/lib/dedup";
 import { parseTransactionsCsv } from "@/lib/csv-import";
-import {
-  encodeRow,
-  MAX_IMPORT_ROWS,
-  type PreviewRow,
-} from "@/lib/import-encode";
-import { decodeRow } from "@/lib/import-encode";
+import { db } from "@/lib/db";
+import { importBatches, transactions } from "@/lib/db/schema";
+import { transactionDedupKey } from "@/lib/dedup";
+import { decodeRow, encodeRow, MAX_IMPORT_ROWS, type PreviewRow } from "@/lib/import-encode";
 import { addTransaction } from "@/lib/transactions";
-
-/** Every refusal comes back on the import page, next to the file input. */
-function fail(message: string): never {
-  redirect(`/transactions/import?error=${encodeURIComponent(message)}`);
-}
 
 /**
  * Statement import — PLAN.md §10.4.
@@ -30,7 +20,18 @@ function fail(message: string): never {
  * submitted. Duplicates are unticked in advance rather than hidden, because
  * re-importing an overlapping statement is the normal case and the person doing
  * it should be able to see what was skipped and overrule it.
+ *
+ * The parsed rows are held in `import_batches` between the two steps. They used
+ * to be encoded into the URL, which failed the moment anyone imported a real
+ * statement — three hundred rows come to roughly 28 KB and Node refuses a
+ * request line over 16 KB. Keeping them server-side also means the commit
+ * writes what was parsed rather than whatever the form posted back.
  */
+
+/** Every refusal comes back on the import page, next to the file input. */
+function fail(message: string): never {
+  redirect(`/transactions/import?error=${encodeURIComponent(message)}`);
+}
 
 export async function previewImportAction(form: FormData): Promise<void> {
   const user = await requireUser();
@@ -57,10 +58,7 @@ export async function previewImportAction(form: FormData): Promise<void> {
     .select({ dedupKey: transactions.dedupKey })
     .from(transactions)
     .where(
-      and(
-        eq(transactions.userId, user.id),
-        inArray(transactions.dedupKey, keys),
-      ),
+      and(eq(transactions.userId, user.id), inArray(transactions.dedupKey, keys)),
     );
   const known = new Set(existing.map((row) => row.dedupKey));
 
@@ -73,20 +71,57 @@ export async function previewImportAction(form: FormData): Promise<void> {
     return { ...row, duplicate };
   });
 
-  const payload = Buffer.from(
-    JSON.stringify(preview.map(encodeRow)),
-    "utf8",
-  ).toString("base64url");
+  // Yesterday's abandoned previews are of no use to anyone.
+  await db
+    .delete(importBatches)
+    .where(lt(importBatches.createdAt, new Date(Date.now() - 86_400_000)));
 
-  redirect(`/transactions/import?stage=preview&ignored=${parsed.ignored}&rows=${payload}`);
+  const [batch] = await db
+    .insert(importBatches)
+    .values({
+      userId: user.id,
+      rows: preview.map(encodeRow),
+      ignoredCount: parsed.ignored,
+    })
+    .returning({ id: importBatches.id });
+
+  redirect(`/transactions/import?batch=${batch.id}`);
+}
+
+/** Reads a batch back, scoped to its owner. */
+export async function loadImportBatch(
+  userId: string,
+  batchId: string,
+): Promise<{ rows: PreviewRow[]; ignored: number } | null> {
+  const [batch] = await db
+    .select()
+    .from(importBatches)
+    .where(and(eq(importBatches.id, batchId), eq(importBatches.userId, userId)))
+    .limit(1);
+
+  if (!batch) return null;
+
+  const rows = (batch.rows as string[])
+    .map(decodeRow)
+    .filter((row): row is PreviewRow => row !== null);
+
+  return { rows, ignored: batch.ignoredCount };
 }
 
 export async function commitImportAction(form: FormData): Promise<void> {
   const user = await requireUser();
   if (user.plan !== "pro") fail("Importing a statement is part of Pro.");
 
-  const chosen = form.getAll("include").map(String);
-  if (chosen.length === 0) {
+  const batchId = String(form.get("batchId") ?? "");
+  const batch = batchId ? await loadImportBatch(user.id, batchId) : null;
+  if (!batch) {
+    fail("That preview has expired. Upload the file again.");
+  }
+
+  // The form sends which rows to keep; the rows themselves come from the batch,
+  // so a tampered form can change what is imported but never what it contains.
+  const chosen = new Set(form.getAll("include").map((value) => Number(value)));
+  if (chosen.size === 0) {
     fail("Nothing was ticked, so nothing was imported.");
   }
 
@@ -94,18 +129,16 @@ export async function commitImportAction(form: FormData): Promise<void> {
   let skipped = 0;
   let failedRows = 0;
 
-  for (const encoded of chosen) {
-    const row = decodeRow(encoded);
-    if (!row) {
-      failedRows += 1;
-      continue;
-    }
+  for (const [index, row] of batch.rows.entries()) {
+    if (!chosen.has(index)) continue;
 
     const result = await addTransaction(user, { ...row, source: "import" });
     if (result.ok) imported += 1;
     else if (result.reason === "duplicate") skipped += 1;
     else failedRows += 1;
   }
+
+  await db.delete(importBatches).where(eq(importBatches.id, batchId));
 
   revalidatePath("/transactions");
   revalidatePath("/");

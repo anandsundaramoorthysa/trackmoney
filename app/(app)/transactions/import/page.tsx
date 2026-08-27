@@ -1,43 +1,23 @@
 import Link from "next/link";
 
 import { requireUser } from "@/lib/auth/guard";
-import { commitImportAction, previewImportAction } from "@/lib/import-actions";
 import {
-  decodeRow,
-  encodeRow,
-  MAX_IMPORT_ROWS,
-  type PreviewRow,
-} from "@/lib/import-encode";
+  commitImportAction,
+  loadImportBatch,
+  previewImportAction,
+} from "@/lib/import-actions";
+import { MAX_IMPORT_ROWS } from "@/lib/import-encode";
 import { formatPaise } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
-function decodePayload(value: string | undefined): PreviewRow[] {
-  if (!value) return [];
-  try {
-    const encoded = JSON.parse(
-      Buffer.from(value, "base64url").toString("utf8"),
-    ) as string[];
-    return encoded
-      .map(decodeRow)
-      .filter((row): row is PreviewRow => row !== null);
-  } catch {
-    return [];
-  }
-}
-
 export default async function ImportPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    error?: string;
-    stage?: string;
-    rows?: string;
-    ignored?: string;
-  }>;
+  searchParams: Promise<{ error?: string; batch?: string }>;
 }) {
   const user = await requireUser();
-  const { error, stage, rows: payload, ignored } = await searchParams;
+  const { error, batch: batchId } = await searchParams;
 
   if (user.plan !== "pro") {
     return (
@@ -63,7 +43,9 @@ export default async function ImportPage({
     );
   }
 
-  const rows = decodePayload(payload);
+  const batch = batchId ? await loadImportBatch(user.id, batchId) : null;
+  const rows = batch?.rows ?? [];
+  const ignored = batch?.ignored ?? 0;
   const duplicates = rows.filter((row) => row.duplicate).length;
 
   return (
@@ -85,7 +67,7 @@ export default async function ImportPage({
         </p>
       )}
 
-      {stage !== "preview" || rows.length === 0 ? (
+      {rows.length === 0 ? (
         <section className="rounded-xl border border-line bg-surface p-5">
           <form action={previewImportAction} className="space-y-4">
             <label className="block">
@@ -112,6 +94,7 @@ export default async function ImportPage({
         </section>
       ) : (
         <form action={commitImportAction} className="space-y-4">
+          <input type="hidden" name="batchId" value={batchId} />
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <span className="rounded-lg border border-line bg-surface px-3 py-1.5">
               <span className="text-muted">Rows read </span>
@@ -123,7 +106,7 @@ export default async function ImportPage({
                 <span className="font-mono tabular text-agent">{duplicates}</span>
               </span>
             )}
-            {Number(ignored ?? 0) > 0 && (
+            {ignored > 0 && (
               <span className="rounded-lg border border-line bg-surface px-3 py-1.5">
                 <span className="text-muted">Not spending rows </span>
                 <span className="font-mono tabular">{ignored}</span>
@@ -159,7 +142,7 @@ export default async function ImportPage({
                         <input
                           type="checkbox"
                           name="include"
-                          value={encodeRow(row)}
+                          value={index}
                           defaultChecked={!row.duplicate}
                           aria-label={`Import ${row.merchant} on ${row.occurredOn}`}
                         />

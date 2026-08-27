@@ -123,3 +123,19 @@ export async function consumeMandate(id: string): Promise<boolean> {
 
   return consumed.length > 0;
 }
+
+/**
+ * Hand a mandate back when the purchase it was spent on did not happen.
+ *
+ * The mandate is spent *before* the order is created, so two buyers racing the
+ * same token cannot both succeed. The cost of that ordering is that a failure
+ * downstream — Razorpay unreachable, say — would otherwise burn the
+ * authorisation and leave the account holder to issue another for a purchase
+ * that never took place.
+ */
+export async function releaseMandate(id: string): Promise<void> {
+  await db
+    .update(purchaseMandates)
+    .set({ usedAt: null })
+    .where(eq(purchaseMandates.id, id));
+}

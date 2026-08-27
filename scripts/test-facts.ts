@@ -12,6 +12,7 @@ import {
   parseTransactionsCsv,
 } from "@/lib/csv-import";
 import { detectRecurring } from "@/lib/recurring";
+import { istToday } from "@/lib/time";
 
 /**
  * Tests for the parts that must not be wrong — PLAN.md §6.12 step 4.
@@ -250,6 +251,15 @@ test("leaves ordinary values alone", () => {
   assert.equal(csvCell("Netflix India"), "Netflix India");
 });
 
+console.log("\ndates in IST");
+test("today is the Indian day, not the server's", () => {
+  // 19:00 UTC is already the next day in IST. Composing the transaction form's
+  // default from the server clock put it a day behind, against a month
+  // boundary that is computed in IST.
+  assert.equal(istToday(new Date("2026-08-26T19:00:00Z")), "2026-08-27");
+  assert.equal(istToday(new Date("2026-08-26T10:00:00Z")), "2026-08-26");
+});
+
 console.log("\nreading a statement");
 test("splits quoted fields and doubled quotes", () => {
   const rows = parseCsv('a,b\n"x, y","he said ""hi"""');
@@ -300,6 +310,16 @@ test("keeps a category the file supplies, and falls back otherwise", () => {
   );
   assert.equal(result.rows[0].category, "Food & Drink");
   assert.equal(result.rows[1].category, "Other");
+});
+test("a Value Date column is not mistaken for an amount", () => {
+  // Real Indian statements carry one. Matching "value" against it picked the
+  // date as the amount, and every row then failed to parse.
+  const result = parseTransactionsCsv(
+    "Txn Date,Value Date,Narration,Amount\n01/08/2026,02/08/2026,Swiggy,249.50",
+  );
+  assert.equal(result.problem, null);
+  assert.equal(result.rows.length, 1);
+  assert.equal(result.rows[0].amountPaise, 24_950);
 });
 test("says what is wrong when the columns are unrecognisable", () => {
   const result = parseTransactionsCsv("Foo,Bar\n1,2");
