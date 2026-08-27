@@ -41,6 +41,10 @@ async function isSecureRequest(): Promise<boolean> {
 }
 
 export async function createSession(userId: string): Promise<void> {
+  // Signing in is a natural moment to sweep. Without this the table only ever
+  // grew: the purge existed but nothing called it.
+  await purgeExpiredSessions().catch(() => {});
+
   const token = crypto.randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 86_400_000);
 

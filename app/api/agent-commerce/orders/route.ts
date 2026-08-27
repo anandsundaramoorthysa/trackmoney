@@ -65,6 +65,34 @@ async function handlePOST(request: Request) {
     );
   }
 
+  /**
+   * The buyer's own ceiling, honoured as documented.
+   *
+   * The catalogue advertises `maxAmountMinor` in the request body and the
+   * endpoint used to ignore it, so an agent instructed to spend no more than
+   * a hundred rupees was handed a four-hundred-and-ninety-nine rupee order
+   * anyway. A published field that does nothing is worse than no field.
+   */
+  const buyerCeiling = body.maxAmountMinor;
+  if (buyerCeiling !== undefined) {
+    if (!Number.isInteger(buyerCeiling) || buyerCeiling <= 0) {
+      return NextResponse.json(
+        { error: "maxAmountMinor must be a positive whole number of paise." },
+        { status: 400 },
+      );
+    }
+    if (product.pricePaise > buyerCeiling) {
+      return NextResponse.json(
+        {
+          error: `This product costs ${product.pricePaise} paise, above the ${buyerCeiling} you allowed.`,
+          refusedBecause: "above_buyer_limit",
+          priceMinor: product.pricePaise,
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   const check = await checkMandate({
     token,
     productId,

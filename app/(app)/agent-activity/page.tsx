@@ -56,7 +56,10 @@ export default async function AgentActivityPage() {
         </div>
 
         <div className="flex flex-wrap gap-3 text-sm">
-          <Tally label="Events" value={events.length} />
+          <Tally
+            label={truncated ? `Events (latest ${TRAIL_LIMIT})` : "Events"}
+            value={events.length}
+          />
           <Tally label="Money actions" value={moneyActions} />
           <Tally label="Tool calls refused" value={refusals} tone="agent" />
         </div>

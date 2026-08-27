@@ -12,7 +12,7 @@ import {
   parseTransactionsCsv,
 } from "@/lib/csv-import";
 import { detectRecurring } from "@/lib/recurring";
-import { istToday } from "@/lib/time";
+import { isRealDate, istToday } from "@/lib/time";
 
 /**
  * Tests for the parts that must not be wrong — PLAN.md §6.12 step 4.
@@ -324,6 +324,21 @@ test("a Value Date column is not mistaken for an amount", () => {
 test("says what is wrong when the columns are unrecognisable", () => {
   const result = parseTransactionsCsv("Foo,Bar\n1,2");
   assert.match(result.problem ?? "", /date column/i);
+});
+test("a well-formed date is not automatically a real day", () => {
+  // The shape check alone let these through to a date column, where they threw.
+  assert.equal(isRealDate("2026-02-30"), false);
+  assert.equal(isRealDate("2025-13-01"), false);
+  assert.equal(isRealDate("2026-04-31"), false);
+  assert.equal(isRealDate("2026-00-10"), false);
+  assert.equal(isRealDate("2026-06-00"), false);
+});
+test("real days, including a leap day, are accepted", () => {
+  assert.equal(isRealDate("2026-02-28"), true);
+  assert.equal(isRealDate("2024-02-29"), true);
+  assert.equal(isRealDate("2026-12-31"), true);
+  // 2100 is not a leap year, and the check must know it.
+  assert.equal(isRealDate("2100-02-29"), false);
 });
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { planConfig, transactions, type User } from "@/lib/db/schema";
 import { isUniqueViolation } from "@/lib/db/errors";
 import { transactionDedupKey } from "@/lib/dedup";
-import { istMonthRange, istToday } from "@/lib/time";
+import { isRealDate, istMonthRange, istToday } from "@/lib/time";
 
 /**
  * Writing a transaction — PLAN.md §10.3.
@@ -110,7 +110,8 @@ export async function addTransaction(
       message: "That amount is larger than this app can record.",
     };
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.occurredOn)) {
+  // Shape and reality: "2026-02-30" is well formed and is not a day.
+  if (!isRealDate(input.occurredOn)) {
     return { ok: false, reason: "invalid", message: "Enter a valid date." };
   }
 
@@ -130,6 +131,17 @@ export async function addTransaction(
     };
   }
 
+  /**
+   * Categories are a fixed list, so anything else becomes "Other".
+   *
+   * The form offers a select, but a server action takes whatever is posted, and
+   * an unknown string would flow into the insights breakdown and into the
+   * agent's facts as though it were a real category.
+   */
+  const category = (CATEGORIES as readonly string[]).includes(input.category)
+    ? input.category
+    : "Other";
+
   const dedupKey = transactionDedupKey({
     userId: user.id,
     occurredOn: input.occurredOn,
@@ -143,7 +155,7 @@ export async function addTransaction(
       .values({
         userId: user.id,
         merchant,
-        category: input.category,
+        category,
         amountPaise: input.amountPaise,
         occurredOn: input.occurredOn,
         source: input.source ?? "manual",

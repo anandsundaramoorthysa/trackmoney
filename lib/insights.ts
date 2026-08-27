@@ -15,7 +15,11 @@ import { istMonthRange, shiftDays } from "@/lib/time";
 export type CategoryTotal = {
   category: string;
   totalPaise: number;
-  /** Whole-percent share of the month, so the figures add up on screen. */
+  /**
+   * Whole-percent share of the month, rounded independently. Three equal
+   * categories therefore read 33% each and total 99 — the figures are each
+   * correct and the column is not guaranteed to sum to 100.
+   */
   sharePercent: number;
   previousPaise: number;
   changePaise: number;

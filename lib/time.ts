@@ -65,3 +65,22 @@ export function istToday(now: Date = new Date()): string {
   const ist = new Date(now.getTime() + IST_OFFSET_MINUTES * 60_000);
   return isoDate(ist.getUTCFullYear(), ist.getUTCMonth() + 1, ist.getUTCDate());
 }
+
+/**
+ * Is this an ISO date that names a day that exists?
+ *
+ * The shape check alone let "2026-02-30" and "2025-13-01" through to a `date`
+ * column, which threw and reached the user as a 500. Round-tripping is the
+ * cheapest way to tell a well-formed string from a real day.
+ */
+export function isRealDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
+  const [y, m, d] = value.split("-").map(Number);
+  const asDate = new Date(Date.UTC(y, m - 1, d));
+  return (
+    asDate.getUTCFullYear() === y &&
+    asDate.getUTCMonth() === m - 1 &&
+    asDate.getUTCDate() === d
+  );
+}
