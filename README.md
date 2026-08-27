@@ -324,6 +324,13 @@ All seeded data is fictional.
 [`PLAN.md`](PLAN.md) is the design record: track choice, the decisions and the
 reasoning behind each, written before the code.
 
+| Also | |
+|---|---|
+| [`PITCH.md`](PITCH.md) | The five-minute pitch, and the questions a panel will ask |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Diagrams: one turn, the three ways to buy, what enforces what |
+| [`docs/DEMO.md`](docs/DEMO.md) | The exact clicks, in order |
+| [`docs/DEPLOY.md`](docs/DEPLOY.md) | Getting it onto Vercel |
+
 ## Licence
 
 [MIT](LICENSE).
