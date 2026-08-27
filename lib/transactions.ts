@@ -1,7 +1,7 @@
-import { and, count, eq, gte, lt } from "drizzle-orm";
+import { and, count, eq, gte, lt, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { planConfig, transactions, type User } from "@/lib/db/schema";
+import { monthQuota, planConfig, transactions, type User } from "@/lib/db/schema";
 import { isUniqueViolation } from "@/lib/db/errors";
 import { transactionDedupKey } from "@/lib/dedup";
 import { isRealDate, istMonthRange, istToday } from "@/lib/time";
@@ -62,16 +62,22 @@ export async function countThisMonth(userId: string): Promise<number> {
  * a Free account could add any number of back-dated rows: the limit guarded one
  * month and left every other one wide open.
  */
-export async function countInMonth(
-  userId: string,
-  day: string,
-): Promise<number> {
+function monthBounds(day: string): { start: string; endExclusive: string } {
   const start = `${day.slice(0, 7)}-01`;
   const [year, month] = start.split("-").map(Number);
   const endExclusive =
     month === 12
       ? `${year + 1}-01-01`
       : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+
+  return { start, endExclusive };
+}
+
+export async function countInMonth(
+  userId: string,
+  day: string,
+): Promise<number> {
+  const { start, endExclusive } = monthBounds(day);
 
   const [row] = await db
     .select({ total: count() })
@@ -122,13 +128,18 @@ export async function addTransaction(
   // Counted against the month the transaction belongs to, so a back-dated row
   // is limited by its own month rather than escaping the cap entirely.
   const cap = await planLimitFor(user);
-  if (cap !== null && (await countInMonth(user.id, input.occurredOn)) >= cap) {
-    return {
-      ok: false,
-      reason: "cap_reached",
-      cap,
-      month: input.occurredOn.slice(0, 7),
-    };
+  const month = input.occurredOn.slice(0, 7);
+
+  if (cap !== null) {
+    const counted = await countInMonth(user.id, input.occurredOn);
+    if (counted >= cap) {
+      return { ok: false, reason: "cap_reached", cap, month };
+    }
+    // The count above only decides where a fresh counter starts. Whether there
+    // is room is decided by the reservation, which is atomic.
+    if (!(await reserveMonthSlot(user.id, month, cap, counted))) {
+      return { ok: false, reason: "cap_reached", cap, month };
+    }
   }
 
   /**
@@ -165,11 +176,61 @@ export async function addTransaction(
 
     return { ok: true, id: row.id };
   } catch (error) {
+    // The slot was taken on the promise of a row that never arrived.
+    if (cap !== null) await releaseMonthSlot(user.id, month);
+
     // The unique index is the authority on what counts as a duplicate, so a
     // constraint violation is an expected outcome here rather than a fault.
     if (isUniqueViolation(error)) return { ok: false, reason: "duplicate" };
     throw error;
   }
+}
+
+/**
+ * Take one slot of the month's cap, or report that there is none left.
+ *
+ * The whole rule is this one statement. `ON CONFLICT DO UPDATE` locks the
+ * existing row, re-reads it, and evaluates the `WHERE` against the value it
+ * finds rather than against anything this request read earlier — so six
+ * requests arriving at nineteen of twenty queue on the row and exactly one is
+ * allowed through.
+ *
+ * The row is created lazily from the real count, which is what lets seeded and
+ * imported history be respected without a backfill: the first reservation in a
+ * month starts the counter where the data already is.
+ */
+async function reserveMonthSlot(
+  userId: string,
+  month: string,
+  cap: number,
+  countedSoFar: number,
+): Promise<boolean> {
+  const reserved = await db
+    .insert(monthQuota)
+    .values({ userId, month, used: countedSoFar + 1 })
+    .onConflictDoUpdate({
+      target: [monthQuota.userId, monthQuota.month],
+      set: { used: sql`${monthQuota.used} + 1` },
+      setWhere: sql`${monthQuota.used} < ${cap}`,
+    })
+    .returning({ used: monthQuota.used });
+
+  return reserved.length > 0;
+}
+
+/**
+ * Hand a slot back.
+ *
+ * Every path out of `addTransaction` after a successful reservation releases on
+ * the way — a duplicate, a bad write, anything thrown. Only the process being
+ * killed between the two statements can leave a slot spoken for, and the next
+ * month starts clean.
+ */
+async function releaseMonthSlot(userId: string, month: string): Promise<void> {
+  await db
+    .update(monthQuota)
+    .set({ used: sql`greatest(${monthQuota.used} - 1, 0)` })
+    .where(and(eq(monthQuota.userId, userId), eq(monthQuota.month, month)));
 }
 
 export async function deleteTransaction(
@@ -179,7 +240,13 @@ export async function deleteTransaction(
   const removed = await db
     .delete(transactions)
     .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)))
-    .returning({ id: transactions.id });
+    .returning({ id: transactions.id, occurredOn: transactions.occurredOn });
+
+  // Give the month its slot back, or a Free account would be able to delete a
+  // row and still be told the month is full.
+  if (removed.length > 0) {
+    await releaseMonthSlot(user.id, removed[0].occurredOn.slice(0, 7));
+  }
 
   return removed.length > 0;
 }

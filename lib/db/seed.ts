@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import {
   agentEvents,
   conversations,
+  monthQuota,
   payments,
   planConfig,
   transactions,
@@ -208,6 +209,9 @@ export async function seedDatabase(): Promise<SeedSummary> {
   await db.delete(payments).where(eq(payments.userId, user.id));
   await db.delete(conversations).where(eq(conversations.userId, user.id));
   await db.delete(transactions).where(eq(transactions.userId, user.id));
+  // The cap counter is derived from these rows, so it has to go with them or
+  // the reseeded account would start its month already spoken for.
+  await db.delete(monthQuota).where(eq(monthQuota.userId, user.id));
 
   const rows = [
     ...buildMonth(user.id, 0, [...RECURRING, ...CURRENT_MONTH_ONE_OFFS], {

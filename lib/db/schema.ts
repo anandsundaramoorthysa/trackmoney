@@ -6,6 +6,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -172,6 +173,34 @@ export const agentEvents = pgTable("agent_events", {
     .notNull()
     .defaultNow(),
 });
+
+/**
+ * One row per account per month, holding how many slots of the Free cap are
+ * spoken for.
+ *
+ * The cap used to be a count followed by an insert, which two requests arriving
+ * together both pass at nineteen of twenty. There is no unique index to lean on
+ * the way the open-order rule does — a cap of twenty is not a uniqueness rule —
+ * and the HTTP driver Neon speaks cannot open a transaction, so a lock cannot
+ * span the read and the write.
+ *
+ * What is left is a single statement that is atomic on its own: an upsert whose
+ * DO UPDATE re-reads this row under a row lock and re-checks the limit against
+ * the value it actually finds. Concurrent writers queue on the row and each one
+ * sees the previous one's increment.
+ */
+export const monthQuota = pgTable(
+  "month_quota",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** "2026-08" — the month a transaction belongs to, not the month it was entered. */
+    month: text("month").notNull(),
+    used: integer("used").notNull().default(0),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.month] })],
+);
 
 export const payments = pgTable(
   "payments",

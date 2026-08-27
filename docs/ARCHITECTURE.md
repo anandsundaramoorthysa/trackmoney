@@ -119,10 +119,20 @@ the claim the audit trail exists to let someone check.
 | Never charge an account already on Pro | `createProUpgradeOrder()` | the caller |
 | The same charge cannot be imported twice | **a unique index** on a content hash | the import code |
 | A mandate buys once | a conditional `UPDATE`, before the order | a flag |
+| The Free cap holds under concurrency | **a conditional upsert** on `month_quota` | counting, then writing |
 
-The two in bold are the ones that survive concurrency. Both were checks in code
-first, and both were promoted to constraints after a test caught two requests
+The three in bold are the ones that survive concurrency. All three were checks
+in code first, and all three were promoted after a test caught two requests
 passing the same check.
+
+The cap is the interesting one, because it could not be solved the same way. A
+limit of twenty is not a uniqueness rule, so there is no index to violate, and
+the HTTP driver Neon speaks cannot open a transaction — a lock cannot be held
+across a read and a write. What is left is a statement that is atomic by itself:
+an upsert whose `DO UPDATE` re-reads the counter row under a row lock and
+re-checks the limit against the value it finds there, not against anything the
+request read a moment earlier. Concurrent writers queue on that row, and each
+one sees the increment before it.
 
 ---
 
@@ -133,6 +143,7 @@ users ──┬── sessions            (token stored as a hash, never in plai
         ├── password_resets     (hashed, single-use, 15 minutes)
         ├── purchase_mandates   (hashed, single-use, 30 minutes, capped)
         ├── transactions        (unique per user + content fingerprint)
+        ├── month_quota         (the Free cap, one row per account per month)
         ├── conversations ── agent_events   (the trail, with facts attached)
         └── payments           (≤ 1 open order per user, by constraint)
 
