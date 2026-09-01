@@ -23,6 +23,7 @@ next-env.d.ts
 # test artifacts
 test-results/
 playwright-report/
+.playwright-mcp/
 
 # Kept on disk, deliberately out of the public repo: the internal planning
 # notes and the test suite. Both stay in the working tree, so the suites still
