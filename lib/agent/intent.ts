@@ -82,24 +82,35 @@ const QUESTION_WORDS = [
 ];
 
 /**
- * "no" as a determiner, not a refusal.
+ * Phrases that carry a refusal word without being a refusal.
  *
  * "no problem, go ahead" is a yes. Matching the bare token meant the most
  * enthusiastic possible consent was recorded as a permanent decline, which is
- * the one thing this classifier must never infer. These are removed before the
- * refusal test runs.
+ * the one thing this classifier must never infer.
+ *
+ * "why not" belongs here for the same reason and one more: it is neither a
+ * negation nor, despite the word, a question. "Sure, why not" is somebody
+ * agreeing, and it was being read first as a contradiction and then as a
+ * request for reasons — two turns of the agent explaining itself to a person
+ * who had already said yes.
+ *
+ * These are removed before the refusal test runs, and before the question
+ * test, so a rhetorical "why" does not make an answer into a question.
  */
 const NOT_A_REFUSAL =
-  /\bno(t a|t an|t)? (problem|worries|worry|doubt|issue|issues|idea|rush|hurry|need|objection)\b/g;
+  /\b(no(t a|t an|t)? (problem|worries|worry|doubt|issue|issues|idea|rush|hurry|need|objection)|why not)\b/g;
 
 export function classifyIntent(message: string): Intent {
   const text = message.toLowerCase().trim();
   if (!text) return "unclear";
 
-  const asksSomething =
-    text.includes("?") || QUESTION_WORDS.some((re) => re.test(text));
-
   const meaningful = text.replace(NOT_A_REFUSAL, " ");
+
+  // Asked of what remains once the rhetorical phrases are gone. A question
+  // mark still counts wherever it appears, so a bare "why not?" — someone
+  // genuinely asking for reasons — stays a question and gets an answer.
+  const asksSomething =
+    meaningful.includes("?") || QUESTION_WORDS.some((re) => re.test(meaningful));
   const saysNo = HARD_NEGATIVE.some((re) => re.test(meaningful));
   const mentionsNot = SOFT_NEGATIVE.some((re) => re.test(meaningful));
   const saysYes = AFFIRMATIVE.some((re) => re.test(meaningful));
