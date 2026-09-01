@@ -107,7 +107,7 @@ privilege you do not already have.
 
 ### Audit trail
 
-[`/agent-activity`](app/agent-activity/page.tsx), written by
+[`/agent-activity`](app/%28app%29/agent-activity/page.tsx), written by
 [`lib/audit.ts`](lib/audit.ts). One row per thing the agent did *or was stopped
 from doing*: what it noticed, what it said, how your reply was classified, what
 order it created, how the payment ended.
@@ -339,7 +339,7 @@ All seeded data is fictional.
 | [`lib/razorpay.ts`](lib/razorpay.ts) | The one shared order function; HMAC verification |
 | [`lib/audit.ts`](lib/audit.ts) | Audit-trail writer |
 | [`lib/db/schema.ts`](lib/db/schema.ts) | Six tables |
-| [`app/agent-activity/`](app/agent-activity/) | The audit trail page |
+| [`app/(app)/agent-activity/`](app/%28app%29/agent-activity/) | The audit trail page |
 
 | Also | |
 |---|---|
