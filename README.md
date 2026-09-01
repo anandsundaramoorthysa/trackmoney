@@ -4,6 +4,10 @@
 
 **Razorpay AI Buildathon — Track 1: AI Growth & Agentic Commerce**
 
+**Live demo: <https://trackmoney-anandsundaramoorthysa.vercel.app>** — press
+*Try the demo account*, no signup needed. Razorpay runs in test mode throughout;
+no real money moves.
+
 TrackMoney is a small expense tracker that sells its own Pro upgrade. You sign
 in, log what you spend, and hit the Free plan's limit — at which point an agent
 notices something true about your account, explains it in your own numbers,
