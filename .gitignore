@@ -20,6 +20,10 @@ next-env.d.ts
 # typescript
 *.tsbuildinfo
 
+# test artifacts
+test-results/
+playwright-report/
+
 # misc
 .DS_Store
 *.pem
