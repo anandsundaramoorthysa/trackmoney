@@ -50,7 +50,7 @@ Then in the browser:
 - `/login` → **Try the demo account** → dashboard shows **19 of 20**
 - `/api/catalog` returns JSON
 - Add two transactions; the second is refused
-- Pay with `4111 1111 1111 1111`
+- Pay with `5267 3181 8797 5449` and OTP `1234`
 
 ## 5. Before the pitch
 

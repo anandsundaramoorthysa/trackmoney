@@ -30,7 +30,7 @@ Then, in the browser:
 | 7 | — | **Reset demo data** | Back to 19 |
 | 8 | `/` | Type "yes please" | Order prepared, button appears |
 | 9 | `/` | Click **Open secure checkout** | Razorpay modal |
-| 10 | modal | `4111 1111 1111 1111`, any future expiry, any CVV | Verified → Pro |
+| 10 | modal | `5267 3181 8797 5449`, any future expiry, any CVV, OTP `1234` | Verified → Pro |
 | 11 | `/` | Look at what changed | Full month, recurring **named**, Export CSV |
 | 12 | `/agent-activity` | Expand a row | The facts object behind the sentence |
 | 13 | `/api/catalog` | Show the raw JSON | Machine-readable, prices in paise |
@@ -40,7 +40,7 @@ Then, in the browser:
 ## The failure path, if you have time
 
 Reset, say **"yes please"**, click **Open secure checkout**, and pay with
-`4000 0000 0000 0002`.
+the same card and then an incorrect OTP.
 
 Expect: *"That payment did not go through… You are still on Free and nothing was
 charged."* The order shows as `failed` on Billing with its reason, and the
@@ -50,8 +50,13 @@ account is untouched.
 
 | Card | Outcome |
 |---|---|
-| `4111 1111 1111 1111` | succeeds |
-| `4000 0000 0000 0002` | fails |
+| `5267 3181 8797 5449` | succeeds — a domestic card, with OTP `1234` |
+| the same card, wrong OTP | fails, and the app records the reason |
+
+> `4111 1111 1111 1111` is the card most Razorpay examples use, and it does
+> **not** work here: the account has international cards disabled, so the
+> checkout answers *"International cards are not supported"*. Verified
+> against the deployed app on 1 September 2026.
 
 Any future expiry, any CVV.
 

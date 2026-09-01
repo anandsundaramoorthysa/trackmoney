@@ -1,0 +1,279 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - link "TrackMoney TrackMoney" [ref=e6] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e7]:
+            - img "TrackMoney" [ref=e8]
+            - generic [ref=e13]: TrackMoney
+        - navigation [ref=e14]:
+          - link "Dashboard" [ref=e15] [cursor=pointer]:
+            - /url: /
+            - img [ref=e16]
+            - generic [ref=e21]: Dashboard
+          - link "Transactions" [ref=e22] [cursor=pointer]:
+            - /url: /transactions
+            - img [ref=e23]
+            - generic [ref=e26]: Transactions
+          - link "Insights" [ref=e27] [cursor=pointer]:
+            - /url: /insights
+            - img [ref=e28]
+            - generic [ref=e30]: Insights
+          - link "Billing" [ref=e31] [cursor=pointer]:
+            - /url: /billing
+            - img [ref=e32]
+            - generic [ref=e34]: Billing
+          - link "Agent activity" [ref=e35] [cursor=pointer]:
+            - /url: /agent-activity
+            - img [ref=e36]
+            - generic [ref=e39]: Agent activity
+        - generic [ref=e40]:
+          - generic [ref=e41]:
+            - paragraph [ref=e42]: Ananya Rao
+            - paragraph [ref=e43]: demo@trackmoney.app
+            - generic [ref=e44]: Free plan
+          - button "Sign out" [ref=e46]
+    - generic [ref=e47]:
+      - paragraph [ref=e48]: Demo for the Razorpay AI Buildathon. Razorpay runs in test mode and no real money moves — please do not enter real financial data.
+      - main [ref=e49]:
+        - generic [ref=e50]:
+          - generic [ref=e51]:
+            - heading "Billing" [level=1] [ref=e52]
+            - paragraph [ref=e53]:
+              - text: The ordinary way to upgrade, with no agent involved. This button and the assistant call the same server function —
+              - code [ref=e54]: createProUpgradeOrder()
+              - text: — so the agent has no payment path of its own.
+          - generic [ref=e55]:
+            - generic [ref=e56]:
+              - generic [ref=e57]:
+                - heading "Free" [level=2] [ref=e58]
+                - generic [ref=e59]: Current plan
+              - paragraph [ref=e60]: Free
+              - list [ref=e61]:
+                - listitem [ref=e62]: · Up to 20 transactions a month
+                - listitem [ref=e63]: · Counts how many charges look recurring
+                - listitem [ref=e64]: · Your top 3 spending categories
+            - generic [ref=e65]:
+              - heading "Pro" [level=2] [ref=e67]
+              - paragraph [ref=e68]: ₹499 one-time
+              - list [ref=e69]:
+                - listitem [ref=e70]: · Unlimited transactions a month
+                - listitem [ref=e71]: · Names the recurring charges it finds, not just the count
+                - listitem [ref=e72]: · Every spending category, with the change against last month
+                - listitem [ref=e73]: · Import a statement from CSV
+                - listitem [ref=e74]: · CSV export of the month's transactions
+              - button "Opening checkout…" [disabled] [ref=e94]
+          - generic [ref=e78]:
+            - heading "Let an AI agent buy this" [level=2] [ref=e79]
+            - paragraph [ref=e80]:
+              - text: A purchase mandate is a one-time authorisation an AI buyer presents instead of you clicking. It names one product, caps the amount at ₹499, expires in 30 minutes, and is spent by the first order that uses it. It authorises an
+              - emphasis [ref=e81]: order
+              - text: ", never a payment: you still authorise that in Razorpay's own checkout."
+            - generic [ref=e82]:
+              - textbox "What is this agent buying for you?" [ref=e83]
+              - button "Issue a mandate" [ref=e84]
+            - paragraph [ref=e85]:
+              - text: The machine-readable catalogue lives at
+              - link "/api/catalog" [ref=e86] [cursor=pointer]:
+                - /url: /api/catalog
+              - text: .
+          - generic [ref=e87]:
+            - heading "Payment history" [level=2] [ref=e88]
+            - paragraph [ref=e89]: No orders yet. Everything below runs in Razorpay test mode.
+          - paragraph [ref=e90]:
+            - text: "Test-mode cards:"
+            - code [ref=e91]: 4111 1111 1111 1111
+            - text: succeeds,
+            - code [ref=e92]: 4000 0000 0000 0002
+            - text: fails. Any future expiry and any CVV.
+  - alert [ref=e93]
+  - generic [ref=e95]:
+    - generic [ref=e97]: Test Mode
+    - iframe [active] [ref=e98]:
+      - generic [ref=f1e2]:
+        - generic [ref=f1e3]:
+          - generic [ref=f1e4]:
+            - generic [ref=f1e7]:
+              - generic [ref=f1e8]: T
+              - generic "TrackMoney" [ref=f1e10]
+            - generic [ref=f1e12]:
+              - generic [ref=f1e13]:
+                - generic [ref=f1e17]:
+                  - generic [ref=f1e19]: Price Summary
+                  - heading "₹ 0 1 2 3 4 5 6 7 8 9 0 0 1 2 3 4 5 6 7 8 9 0 0 1 2 3 4 5 6 7 8 9 0" [level=3] [ref=f1e22]:
+                    - generic [ref=f1e23]: ₹
+                    - generic [ref=f1e24]:
+                      - generic [ref=f1e25]: "0"
+                      - generic [ref=f1e26]: "1"
+                      - generic [ref=f1e27]: "2"
+                      - generic [ref=f1e28]: "3"
+                      - generic [ref=f1e29]: "4"
+                      - generic [ref=f1e30]: "5"
+                      - generic [ref=f1e31]: "6"
+                      - generic [ref=f1e32]: "7"
+                      - generic [ref=f1e33]: "8"
+                      - generic [ref=f1e34]: "9"
+                      - generic [ref=f1e35]: "0"
+                    - generic [ref=f1e36]:
+                      - generic [ref=f1e37]: "0"
+                      - generic [ref=f1e38]: "1"
+                      - generic [ref=f1e39]: "2"
+                      - generic [ref=f1e40]: "3"
+                      - generic [ref=f1e41]: "4"
+                      - generic [ref=f1e42]: "5"
+                      - generic [ref=f1e43]: "6"
+                      - generic [ref=f1e44]: "7"
+                      - generic [ref=f1e45]: "8"
+                      - generic [ref=f1e46]: "9"
+                      - generic [ref=f1e47]: "0"
+                    - generic [ref=f1e48]:
+                      - generic [ref=f1e49]: "0"
+                      - generic [ref=f1e50]: "1"
+                      - generic [ref=f1e51]: "2"
+                      - generic [ref=f1e52]: "3"
+                      - generic [ref=f1e53]: "4"
+                      - generic [ref=f1e54]: "5"
+                      - generic [ref=f1e55]: "6"
+                      - generic [ref=f1e56]: "7"
+                      - generic [ref=f1e57]: "8"
+                      - generic [ref=f1e58]: "9"
+                      - generic [ref=f1e59]: "0"
+                - button "Using as demo@trackmoney.app" [ref=f1e60] [cursor=pointer]:
+                  - img [ref=f1e62]
+                  - generic [ref=f1e65]: Using as demo@trackmoney.app
+                  - img [ref=f1e67]
+                - button "Win up to ₹100 cashback on every transaction on Navi UPI Upto ₹50 cashback via CRED Offers on UPI, ICICI and Emi" [ref=f1e69] [cursor=pointer]:
+                  - generic [ref=f1e70]:
+                    - img "Win up to ₹100 cashback on every transaction on Navi UPI" [ref=f1e72]
+                    - img "Upto ₹50 cashback via CRED" [ref=f1e74]
+                  - generic "Offers on UPI, ICICI and Emi" [ref=f1e75]
+                  - img [ref=f1e77]
+              - generic [ref=f1e79]:
+                - generic [ref=f1e80]: Secured by
+                - generic "RazorPay" [ref=f1e81]:
+                  - img [ref=f1e82]
+            - generic:
+              - img
+          - generic [ref=f1e85]:
+            - generic [ref=f1e86]:
+              - generic [ref=f1e87]: Payment Options
+              - generic [ref=f1e88]:
+                - button "Show more options" [ref=f1e89] [cursor=pointer]:
+                  - img [ref=f1e91]
+                - button "Close Checkout" [ref=f1e93] [cursor=pointer]:
+                  - img [ref=f1e95]
+            - separator [ref=f1e97]
+            - generic [ref=f1e102]:
+              - generic [ref=f1e104]:
+                - generic [ref=f1e105] [cursor=pointer]:
+                  - radio "UPI 4 Offers googlepay phonepe popclubapp paytm"
+                  - generic [ref=f1e107]:
+                    - generic [ref=f1e108]:
+                      - generic [ref=f1e110]: UPI
+                      - generic [ref=f1e113]: 4 Offers
+                    - generic [ref=f1e115]:
+                      - img "googlepay" [ref=f1e117]
+                      - img "phonepe" [ref=f1e119]
+                      - img "popclubapp" [ref=f1e121]
+                      - img "paytm" [ref=f1e123]
+                - generic [ref=f1e124] [cursor=pointer]:
+                  - radio "Cards Unlimited 1% cashback with Amazon Pay ICICI Bank Credit Card VISA MC RUPAY MAES"
+                  - generic [ref=f1e126]:
+                    - generic [ref=f1e127]:
+                      - generic [ref=f1e129]: Cards
+                      - generic [ref=f1e132]: Unlimited 1% cashback with Amazon Pay ICICI Bank Credit Card
+                    - generic [ref=f1e134]:
+                      - img "VISA" [ref=f1e136]
+                      - img "MC" [ref=f1e138]
+                      - img "RUPAY" [ref=f1e140]
+                      - img "MAES" [ref=f1e142]
+                - generic [ref=f1e143] [cursor=pointer]:
+                  - radio "EMI Upto 1.5% savings with NeuCard on EMI/nonEMI trxn snapmint zestmoney"
+                  - generic [ref=f1e145]:
+                    - generic [ref=f1e146]:
+                      - generic [ref=f1e148]: EMI
+                      - generic [ref=f1e151]: Upto 1.5% savings with NeuCard on EMI/nonEMI trxn
+                    - generic [ref=f1e153]:
+                      - img "snapmint" [ref=f1e155]
+                      - img "zestmoney" [ref=f1e157]
+                - generic [ref=f1e158] [cursor=pointer]:
+                  - radio "Netbanking BARB_R CNRB PUNB_R UTBI"
+                  - generic [ref=f1e160]:
+                    - generic [ref=f1e163]: Netbanking
+                    - generic [ref=f1e165]:
+                      - img "BARB_R" [ref=f1e167]
+                      - img "CNRB" [ref=f1e169]
+                      - img "PUNB_R" [ref=f1e171]
+                      - img "UTBI" [ref=f1e173]
+                - generic [ref=f1e174] [cursor=pointer]:
+                  - radio "Wallet amazonpay mobikwik airtelmoney olamoney"
+                  - generic [ref=f1e176]:
+                    - generic [ref=f1e179]: Wallet
+                    - generic [ref=f1e181]:
+                      - img "amazonpay" [ref=f1e183]
+                      - img "mobikwik" [ref=f1e185]
+                      - img "airtelmoney" [ref=f1e187]
+                      - img "olamoney" [ref=f1e189]
+                - generic [ref=f1e190] [cursor=pointer]:
+                  - radio "Pay Later icic amazonpay"
+                  - generic [ref=f1e192]:
+                    - generic [ref=f1e195]: Pay Later
+                    - generic [ref=f1e197]:
+                      - img "icic" [ref=f1e199]
+                      - img "amazonpay" [ref=f1e201]
+              - generic [ref=f1e204]:
+                - generic [ref=f1e206]:
+                  - generic [ref=f1e208]: Available Offers
+                  - generic [ref=f1e209] [cursor=pointer]:
+                    - button "Upto ₹50 cashback on CRED" [ref=f1e210]:
+                      - generic [ref=f1e217]: Upto ₹50 cashback on CRED
+                    - button "+2 View all" [ref=f1e218]:
+                      - generic [ref=f1e220]:
+                        - generic [ref=f1e223]: "+2"
+                        - generic [ref=f1e226]: View all
+                - generic [ref=f1e228]:
+                  - generic [ref=f1e229]:
+                    - heading "UPI QR" [level=3] [ref=f1e230]
+                    - generic [ref=f1e232]:
+                      - img [ref=f1e234]
+                      - text: 10:21
+                  - generic [ref=f1e238]:
+                    - button "UPI QR Code" [ref=f1e240] [cursor=pointer]:
+                      - img "UPI QR Code" [ref=f1e242]
+                    - generic [ref=f1e244]:
+                      - heading "Scan the QR using any UPI App" [level=4] [ref=f1e245]
+                      - generic [ref=f1e246]:
+                        - img "POP UPI icon" [ref=f1e248]
+                        - img "Google Pay icon" [ref=f1e250]
+                        - img "CRED icon" [ref=f1e252]
+                        - img "PhonePe icon" [ref=f1e254]
+                        - img "Amazon icon" [ref=f1e256]
+                        - img "Navi icon" [ref=f1e258]
+                      - generic [ref=f1e262]: 4 Offers
+            - generic [ref=f1e265]:
+              - text: By proceeding, I agree to Razorpay’s
+              - button "Privacy Notice" [ref=f1e266] [cursor=pointer]
+              - text: •
+              - button "Edit Preferences" [ref=f1e267] [cursor=pointer]
+        - generic [ref=f1e271]:
+          - button [ref=f1e272] [cursor=pointer]:
+            - img [ref=f1e274]
+          - generic [ref=f1e276]:
+            - generic [ref=f1e278]:
+              - heading "Contact details" [level=3] [ref=f1e280]
+              - paragraph [ref=f1e281]: Enter mobile & email to continue
+              - generic [ref=f1e282]:
+                - generic [ref=f1e283]:
+                  - button "987654321081234" [ref=f1e304] [cursor=pointer]:
+                    - img "IN" [ref=f1e286]
+                    - text: "+91"
+                    - img [ref=f1e288]
+                  - textbox "Mobile number" [active] [ref=f1e290]: "987654321081234"
+                - alert [ref=f1e299]:
+                  - img [ref=f1e301]
+                  - text: Please enter a valid mobile number
+              - textbox [ref=f1e293]:
+                - /placeholder: Email address (optional)
+                - text: demo@trackmoney.app
+            - button "Continue" [ref=f1e295] [cursor=pointer]

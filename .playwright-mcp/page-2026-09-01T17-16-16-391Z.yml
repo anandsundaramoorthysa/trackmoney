@@ -1,0 +1,26 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - link "TrackMoney TrackMoney" [ref=e3] [cursor=pointer]:
+      - /url: /login
+      - generic [ref=e4]:
+        - img "TrackMoney" [ref=e5]
+        - generic [ref=e10]: TrackMoney
+    - generic [ref=e11]:
+      - heading "Sign in" [level=1] [ref=e12]
+      - paragraph [ref=e13]: Welcome back to TrackMoney.
+      - generic [ref=e14]:
+        - generic [ref=e15]:
+          - generic [ref=e16]: Email
+          - textbox "Email" [ref=e17]
+        - generic [ref=e18]:
+          - generic [ref=e19]: Password
+          - textbox "Password" [ref=e20]
+        - button "Sign in" [ref=e21]
+      - button "Try the demo account" [ref=e23]
+      - generic [ref=e24]:
+        - link "Create an account" [ref=e25] [cursor=pointer]:
+          - /url: /signup
+        - link "Forgot password?" [ref=e26] [cursor=pointer]:
+          - /url: /forgot-password
+    - paragraph [ref=e27]: A demo built for the Razorpay AI Buildathon. Razorpay runs in test mode and no real money moves. Please do not enter real financial data.
+  - alert [ref=e28]

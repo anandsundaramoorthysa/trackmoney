@@ -409,7 +409,26 @@ export async function markPaymentSuccessful(input: {
 
   await db
     .update(payments)
-    .set({ status: "success", razorpayPaymentId: input.paymentId })
+    .set({
+      status: "success",
+      razorpayPaymentId: input.paymentId,
+      /**
+       * Clear whatever the last failed attempt left behind.
+       *
+       * One order can be paid more than once before it settles — a declined
+       * card, a wrong OTP, an international card on a domestic-only account —
+       * and Razorpay lets the person retry inside the same checkout against
+       * the same order. Marking success without clearing the reason left the
+       * row saying both things at once, and the billing table rendered it as
+       * "success" immediately followed by the text of a failure that had since
+       * been overcome.
+       *
+       * The attempts are not lost: every one of them is a row in the audit
+       * trail, which is where the history belongs. This column describes where
+       * the order ended up.
+       */
+      failureReason: null,
+    })
     .where(eq(payments.id, existing.id));
 
   await db.update(users).set({ plan: "pro" }).where(eq(users.id, input.user.id));

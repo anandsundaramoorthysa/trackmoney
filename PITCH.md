@@ -101,7 +101,7 @@ Reset. Say **"yes please."**
 > press it. Checkout.js runs in my browser; the agent runs on the server. That
 > is structural, not a policy."
 
-Pay with `4111 1111 1111 1111`.
+Pay with `5267 3181 8797 5449`, OTP `1234`.
 
 > "Verified server-side by recomputing the HMAC signature. The browser saying it
 > worked proves nothing."

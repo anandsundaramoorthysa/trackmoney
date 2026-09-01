@@ -124,7 +124,7 @@ Both failure paths are wired, because they prove different things:
 
 - **You decline.** The conversation moves to `declined`, the agent acknowledges
   it in one sentence and will not raise it again. Proves gating.
-- **The payment fails.** Use test card `4000 0000 0000 0002`. The order is marked
+- **The payment fails.** Enter an incorrect OTP at the checkout. The order is marked
   `failed` with its reason, the account stays on Free, the agent says plainly
   what happened and points at the billing page. No crash, no silent retry loop.
   Proves graceful failure. See
@@ -206,8 +206,12 @@ believed.
 
 | Card | Outcome |
 |---|---|
-| `4111 1111 1111 1111` | succeeds |
-| `4000 0000 0000 0002` | fails — this is the graceful-failure demo |
+| `5267 3181 8797 5449` | succeeds — a domestic card. OTP `1234` |
+| the same card, wrong OTP | fails — this is the graceful-failure demo |
+
+> `4111 1111 1111 1111` appears in most Razorpay examples and does **not** work
+> here: this account has international cards disabled, so the checkout answers
+> *"International cards are not supported"*. Verified against the deployed app.
 
 Any future expiry, any CVV.
 

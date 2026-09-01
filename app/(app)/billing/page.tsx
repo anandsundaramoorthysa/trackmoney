@@ -185,8 +185,8 @@ export default async function BillingPage({
         </section>
 
         <p className="text-xs text-muted">
-          Test-mode cards: <code className="font-mono">4111 1111 1111 1111</code>{" "}
-          succeeds, <code className="font-mono">4000 0000 0000 0002</code> fails.
+          Test-mode card: <code className="font-mono">5267 3181 8797 5449</code>{" "}
+          succeeds. Enter any wrong OTP to see a payment fail.
           Any future expiry and any CVV.
         </p>
       </div>
