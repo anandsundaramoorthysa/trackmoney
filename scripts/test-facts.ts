@@ -12,7 +12,7 @@ import {
   parseTransactionsCsv,
 } from "@/lib/csv-import";
 import { detectRecurring } from "@/lib/recurring";
-import { isRealDate, istToday } from "@/lib/time";
+import { isRealDate, istMonthRange, istToday } from "@/lib/time";
 
 /**
  * Tests for the parts that must not be wrong — PLAN.md §6.12 step 4.
@@ -340,6 +340,45 @@ test("real days, including a leap day, are accepted", () => {
   // 2100 is not a leap year, and the check must know it.
   assert.equal(isRealDate("2100-02-29"), false);
 });
+test("the IST day turns over at 18:30 UTC, not at midnight UTC", () => {
+  // Vercel runs in UTC and the product is Indian, so "today" has to be an IST
+  // question. 18:29 UTC is 23:59 in Bengaluru; two minutes later it is
+  // tomorrow there and still today in London.
+  const at = (iso: string) => istToday(new Date(iso));
+
+  assert.equal(at("2026-09-15T18:29:00Z"), "2026-09-15");
+  assert.equal(at("2026-09-15T18:31:00Z"), "2026-09-16");
+  // Midnight UTC is already half past five in the morning in India.
+  assert.equal(at("2026-09-16T00:00:00Z"), "2026-09-16");
+});
+
+test("the month turns over on IST time too", () => {
+  const at = (iso: string) => istMonthRange(new Date(iso));
+
+  const stillSeptember = at("2026-09-30T18:29:00Z");
+  assert.equal(stillSeptember.label, "September 2026");
+  assert.equal(stillSeptember.start, "2026-09-01");
+  assert.equal(stillSeptember.endExclusive, "2026-10-01");
+
+  const nowOctober = at("2026-09-30T18:31:00Z");
+  assert.equal(nowOctober.label, "October 2026");
+  assert.equal(nowOctober.start, "2026-10-01");
+  assert.equal(nowOctober.endExclusive, "2026-11-01");
+});
+
+test("a December month range ends in the following January", () => {
+  const december = istMonthRange(new Date("2026-12-10T00:00:00Z"));
+  assert.equal(december.start, "2026-12-01");
+  assert.equal(december.endExclusive, "2027-01-01");
+  assert.equal(december.label, "December 2026");
+
+  // And the new year, counted in IST, arrives at 18:30 UTC on the 31st.
+  const newYear = istMonthRange(new Date("2026-12-31T18:31:00Z"));
+  assert.equal(newYear.label, "January 2027");
+  assert.equal(newYear.start, "2027-01-01");
+  assert.equal(newYear.endExclusive, "2027-02-01");
+});
+
 
 console.log(`\n${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);
