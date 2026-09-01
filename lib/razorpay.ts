@@ -110,8 +110,24 @@ export async function createProUpgradeOrder(
     conversationId?: string | null;
   },
 ): Promise<CreateOrderResult> {
-  // Rule 5 — already on Pro. Applies to every caller.
-  if (user.plan === "pro") {
+  /**
+   * Rule 5 — already on Pro. Applies to every caller.
+   *
+   * Read the plan from the database rather than trusting the `User` handed in.
+   * Every caller loads that object at the start of its own request, so a second
+   * tab, an agent panel holding a live offer, or an AI buyer working from a
+   * mandate can all arrive with a copy that predates the upgrade. Trusting it
+   * meant an account that had just paid could be given a second order, and a
+   * second order is a second charge. Charging twice for one plan is the single
+   * mistake a payments demo cannot make.
+   */
+  const [onRecord] = await db
+    .select({ plan: users.plan })
+    .from(users)
+    .where(eq(users.id, user.id))
+    .limit(1);
+
+  if ((onRecord?.plan ?? user.plan) === "pro") {
     const message = "This account is already on Pro, so there is nothing to charge for.";
     await logAgentEvent({
       userId: user.id,
@@ -373,6 +389,24 @@ export async function markPaymentSuccessful(input: {
     };
   }
 
+  /**
+   * Has this account already paid for Pro on some other order?
+   *
+   * Order creation is where a second charge is prevented, and it now reads the
+   * plan from the database so it cannot be fooled by a stale copy. This is the
+   * backstop. If a second payment ever does arrive, refusing to record it would
+   * be the worse answer — Razorpay has the money either way, and a payment the
+   * app denies is a payment nobody can reconcile. So it is recorded, and the
+   * trail says plainly that it should not have happened.
+   */
+  const priorSuccess = await db
+    .select({ orderId: payments.razorpayOrderId, amountPaise: payments.amountPaise })
+    .from(payments)
+    .where(and(eq(payments.userId, input.user.id), eq(payments.status, "success")))
+    .limit(1);
+
+  const duplicate = priorSuccess.find((p) => p.orderId !== input.orderId);
+
   await db
     .update(payments)
     .set({ status: "success", razorpayPaymentId: input.paymentId })
@@ -384,14 +418,17 @@ export async function markPaymentSuccessful(input: {
     userId: input.user.id,
     conversationId,
     type: "checkout_result",
-    explanation: `Payment verified and the account is now on Pro. Charged ${formatPaise(existing.amountPaise)} in Razorpay test mode.`,
+    explanation: duplicate
+      ? `Payment verified, but this account had already paid ${formatPaise(duplicate.amountPaise)} for Pro on an earlier order. The money moved, so it is recorded here rather than hidden — it needs refunding.`
+      : `Payment verified and the account is now on Pro. Charged ${formatPaise(existing.amountPaise)} in Razorpay test mode.`,
     facts: { amountPaise: existing.amountPaise },
     meta: {
-      outcome: "success",
+      outcome: duplicate ? "duplicate_purchase" : "success",
       orderId: input.orderId,
       paymentId: input.paymentId,
       verification: "hmac_sha256_signature_match",
       initiatedBy: existing.initiatedBy,
+      ...(duplicate ? { alreadyPaidOn: duplicate.orderId } : {}),
     },
   });
 
