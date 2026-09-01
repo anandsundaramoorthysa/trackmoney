@@ -16,7 +16,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Payment verification — PLAN.md §6.3.
+ * Payment verification
  *
  * The browser telling us a payment succeeded proves nothing. The plan only
  * flips to Pro if the HMAC signature Razorpay returned verifies against our own

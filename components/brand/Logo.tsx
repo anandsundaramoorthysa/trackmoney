@@ -1,5 +1,5 @@
 /**
- * The TrackMoney mark — PLAN.md §7.3.
+ * The TrackMoney mark
  *
  * An ascending track line with a single amber dot on one vertex: the ledger
  * being tracked, and the agent noticing something in it. Four strokes and a

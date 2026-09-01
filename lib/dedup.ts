@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 
 /**
- * Transaction fingerprint — PLAN.md §10.4.
+ * Transaction fingerprint
  *
  * Re-importing a statement that overlaps an earlier one is the normal case, so
  * the same charge must not land twice. Two rows collide when they share an

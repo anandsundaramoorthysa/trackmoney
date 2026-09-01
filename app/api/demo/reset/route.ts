@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Reset demo data — PLAN.md §6.2.
+ * Reset demo data
  *
  * Puts the account back on Free, clears the conversation, the orders and the
  * audit trail, and re-seeds the transactions. Exists so a full run-through can

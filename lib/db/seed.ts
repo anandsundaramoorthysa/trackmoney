@@ -15,7 +15,7 @@ import { transactionDedupKey } from "@/lib/dedup";
 import { isoDate, istYearMonth } from "@/lib/time";
 
 /**
- * Demo data — PLAN.md §6.12 step 3.
+ * Demo data.
  *
  * Seeded, not typed in live, so the demo never depends on a judge entering
  * data during a five-minute pitch. The numbers are chosen so the account sits
@@ -26,7 +26,7 @@ import { isoDate, istYearMonth } from "@/lib/time";
  */
 
 const FREE_TXN_CAP = 20;
-const PRO_PRICE_PAISE = 49_900; // ₹499 one-time — PLAN.md §6.4
+const PRO_PRICE_PAISE = 49_900; // ₹499 one-time
 
 /** Charged every month at the same amount — this is what Pro can detect. */
 const RECURRING = [

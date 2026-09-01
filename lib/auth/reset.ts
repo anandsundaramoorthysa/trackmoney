@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { passwordResets } from "@/lib/db/schema";
 
 /**
- * Password reset tokens — PLAN.md §10.3.
+ * Password reset tokens
  *
  * Hashed, single-use, and dead 15 minutes after issue. The plain token is
  * returned to the caller exactly once and never stored, so a database leak

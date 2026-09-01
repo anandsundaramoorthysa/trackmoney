@@ -1,5 +1,5 @@
 /**
- * Money helpers — PLAN.md §6.4.
+ * Money helpers
  *
  * Every amount in TrackMoney is an integer number of paise. Rupees exist only
  * at the render boundary, which is this file. Nothing else in the codebase is

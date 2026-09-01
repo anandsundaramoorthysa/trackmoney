@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { agentEvents, type AgentEvent, type AgentEventType } from "@/lib/db/schema";
 
 /**
- * The audit trail writer — PLAN.md §6.6.
+ * The audit trail writer
  *
  * Everything the agent does, and everything it was stopped from doing, lands
  * here. Refusals are logged as loudly as successes: a bound nobody can see

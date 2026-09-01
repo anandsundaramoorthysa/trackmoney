@@ -103,7 +103,7 @@ async function handlePOST(request: Request) {
   }
 
   // Note what this route does NOT accept: a user id. The account is resolved
-  // server-side (PLAN.md §6.2), so no caller can aim the agent at someone else.
+  // server-side, so no caller can aim the agent at someone else.
   if (body.kind === "start") {
     const conversation = await getOrCreateConversation(user.id);
     const existing = await listConversationEvents(conversation.id);

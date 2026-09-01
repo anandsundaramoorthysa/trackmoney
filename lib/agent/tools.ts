@@ -6,7 +6,7 @@ import { hasAffirmativeAfterSuggestion, setConversationState } from "./conversat
 import { checkoutReadyTemplate } from "./grounding";
 
 /**
- * The toolset — PLAN.md §6.6.
+ * The toolset
  *
  * Two tools exist. Nothing else is callable, and the enforcement below runs in
  * the handler rather than in the prompt, because a system prompt asking a model

@@ -4,7 +4,7 @@ import { formatPaise } from "@/lib/money";
 import type { Intent } from "./intent";
 
 /**
- * The prompt — PLAN.md §6.8, layer 2.
+ * The prompt, layer 2.
  *
  * The model gets the facts object and nothing else. It has no database access,
  * it is not asked to compute anything, and it is told in plain terms that the

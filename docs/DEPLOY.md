@@ -73,8 +73,8 @@ database does the same thing.
 
 - `ALLOW_DEMO_LOGIN=false` disables the one-click demo account. Leave it unset
   for the submission — a reviewer must not have to register.
-- The deployment is public and anyone can sign up. That trade is deliberate and
-  documented in `PLAN.md` §10.7; the banner on every page says not to enter real
-  financial data.
+- The deployment is public and anyone can sign up. That trade is deliberate: a
+  reviewer must be able to see the real thing without being handed credentials.
+  The banner on every page says not to enter real financial data.
 - Razorpay needs no domain approval for test mode. The "Website/app details"
   section of their dashboard is a live-mode requirement.

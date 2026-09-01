@@ -4,7 +4,7 @@ import type { User } from "@/lib/db/schema";
 import { getSessionUser } from "./session";
 
 /**
- * Page-level authorization — PLAN.md §10.3.
+ * Page-level authorization
  *
  * The check lives in the server component tree rather than in middleware, so
  * it is authoritative: middleware runs before the database is consulted and can

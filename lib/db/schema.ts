@@ -15,7 +15,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 /**
- * TrackMoney schema — PLAN.md §6.7.
+ * TrackMoney schema
  *
  * Deliberately small. There is no multi-tenancy, no row-level security and no
  * double-entry ledger: this app exists so the agent has something real to reason
@@ -257,7 +257,7 @@ export const payments = pgTable(
 );
 
 /**
- * A purchase mandate — PLAN.md §10.5.
+ * A purchase mandate
  *
  * The human-facing flow gates a money action on a person clicking. An AI buyer
  * has no one to click, so the equivalent has to be issued in advance: a scoped,

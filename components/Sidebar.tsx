@@ -5,7 +5,7 @@ import { signOutAction } from "@/lib/auth/actions";
 import type { User } from "@/lib/db/schema";
 
 /**
- * The signed-in shell — PLAN.md §10.3.
+ * The signed-in shell
  *
  * Navigation lives on the left because the app now has more than three
  * destinations and will grow again; a top bar stops scaling at about that

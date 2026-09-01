@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 const TRAIL_LIMIT = 200;
 
 /**
- * The audit trail — PLAN.md §2 step 7.
+ * The audit trail.
  *
  * Deliberately a log, not a chat transcript. Every row is one thing the agent
  * did or was stopped from doing, in order, with the exact facts it was working

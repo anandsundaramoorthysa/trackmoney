@@ -27,7 +27,7 @@ type TurnResponse = {
 };
 
 /**
- * The agent conversation — PLAN.md §2 step 3.
+ * The agent conversation.
  *
  * Note what this panel does when the agent prepares an order: it renders a
  * separate button and stops. The agent cannot open Razorpay's checkout and

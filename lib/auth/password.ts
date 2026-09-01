@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { promisify } from "node:util";
 
 /**
- * Password hashing with scrypt — PLAN.md §10.3.
+ * Password hashing with scrypt
  *
  * scrypt ships in Node, so this costs no dependency and no native build step,
  * and it is memory-hard: the parameters below make each guess expensive in RAM

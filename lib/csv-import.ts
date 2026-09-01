@@ -1,7 +1,7 @@
 import { CATEGORIES } from "@/lib/transactions";
 
 /**
- * Reading a statement — PLAN.md §10.4.
+ * Reading a statement
  *
  * Pure functions, no database and no I/O, so the column rules can be tested
  * directly. Everything here is deterministic detection: no model is involved in

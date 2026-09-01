@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Browser-side checkout handoff — PLAN.md §6.5.
+ * Browser-side checkout handoff
  *
  * Checkout.js only runs in the browser, so the agent structurally cannot open
  * it. It can prepare an order; a person has to open this and authorise the

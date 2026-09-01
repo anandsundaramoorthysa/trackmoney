@@ -16,7 +16,7 @@ import { detectRecurring } from "@/lib/recurring";
 import { isRealDate, istMonthRange, istToday } from "@/lib/time";
 
 /**
- * Tests for the parts that must not be wrong — PLAN.md §6.12 step 4.
+ * Tests for the parts that must not be wrong.
  *
  * These cover the deterministic layers only: the trigger rule, the consent
  * classifier and the grounding check. Those are the three places where a bug

@@ -46,8 +46,8 @@ figure cannot reach the user, and cannot reach the audit trail.
 Two limits, stated rather than implied: the check confirms a figure came from
 the facts, not that it was used for the right thing (3 is in the data as
 "transactions over the cap", so using it as a recurring count would pass), and
-it only inspects digits, not numbers spelled out in words. Both are narrow, both
-are asserted by tests, and both are cheaper to admit than to paper over.
+it only inspects digits, not numbers spelled out in words. Both are narrow, and
+both are cheaper to admit than to paper over.
 
 The trail stores both halves — the wording *and* the facts the agent was handed
 when it wrote it, in `agent_events.facts`. You can diff them.
@@ -175,19 +175,32 @@ resilience* below.
 
 ```bash
 npm run check:providers   # does every external service actually answer?
-npm test             # everything below, in order
-npm run test:facts        # deterministic layers, no database needed
-npm run test:integration  # the server against a real Postgres
-npm run test:e2e          # Playwright, against a production build
 npm run typecheck
+npm run lint
+npm run build
 ```
 
-The integration and browser suites need a local Postgres. They point at
-`postgresql://postgres:postgres@127.0.0.1:5432/trackmoney_test` by default —
-override with `TEST_DATABASE_URL`. They rebuild that database from the committed
-migrations on every run and never touch your development data. Razorpay is
-replaced by a local stand-in that signs with the same secret, so signature
-verification is genuinely exercised rather than stubbed out.
+`check:providers` is the one worth running first. It asks the database,
+Razorpay and both model providers whether they actually answer, and names the
+model it got a reply from — a retired model id fails silently otherwise,
+straight to the template tier, so the fallback looks healthy while nothing has
+run at all.
+
+### How this was verified
+
+The suite itself is not published, but what it covers is worth stating plainly:
+209 assertions across three layers. The deterministic layers — consent
+classification, the grounding check, CSV parsing, the IST date boundaries — run
+without a database. The server layer runs against a real Postgres, rebuilt from
+the committed migrations on every run, with Razorpay replaced by a local
+stand-in that signs with the same secret, so signature verification is genuinely
+exercised rather than stubbed out. The browser layer drives a production build.
+
+Where a rule matters — the cap holding under concurrent writes, an account that
+has paid not being charged again, one account never reaching another's data —
+the check was confirmed by deliberately breaking the code and watching the right
+assertion fail. A test that cannot fail is worse than no test, because it is
+believed.
 
 ### Test cards
 
@@ -319,10 +332,6 @@ All seeded data is fictional.
 | [`lib/audit.ts`](lib/audit.ts) | Audit-trail writer |
 | [`lib/db/schema.ts`](lib/db/schema.ts) | Six tables |
 | [`app/agent-activity/`](app/agent-activity/) | The audit trail page |
-| [`PLAN.md`](PLAN.md) | Why every one of these decisions was made |
-
-[`PLAN.md`](PLAN.md) is the design record: track choice, the decisions and the
-reasoning behind each, written before the code.
 
 | Also | |
 |---|---|

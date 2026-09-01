@@ -7,7 +7,7 @@ import { computeMonthInsights, FREE_CATEGORY_LIMIT } from "@/lib/insights";
 import { istMonthRange, shiftDays } from "@/lib/time";
 
 /**
- * The deterministic fact layer — PLAN.md §6.8, layer 1.
+ * The deterministic fact layer, layer 1.
  *
  * No LLM is involved here and none may be. Every number the agent is ever
  * allowed to say is produced by this function from real rows, and the object it

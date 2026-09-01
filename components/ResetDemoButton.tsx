@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-/** Puts the account back on Free and clears the trail — PLAN.md §6.2. */
+/** Puts the account back on Free and clears the trail */
 export function ResetDemoButton() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);

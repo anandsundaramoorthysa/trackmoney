@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * The graceful-failure path — PLAN.md §6.10 (b).
+ * The graceful-failure path (b).
  *
  * Razorpay's checkout fires `payment.failed` in the browser when a test-mode
  * failure card is used. We record it as a failed payment with its reason and

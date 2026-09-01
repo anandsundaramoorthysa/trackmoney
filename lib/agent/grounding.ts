@@ -2,7 +2,7 @@ import type { UsageFacts } from "@/lib/facts";
 import { formatPaise, paiseToRupeeNumber } from "@/lib/money";
 
 /**
- * The grounding check — PLAN.md §6.8, layer 3.
+ * The grounding check, layer 3.
  *
  * The model is handed a facts object and told to phrase it. This function then
  * checks that every number in what it produced actually came from that object.

@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Buying as a machine — PLAN.md §10.5.
+ * Buying as a machine
  *
  * The only entry point that is not a person. Everything a human click stands
  * for is replaced by a mandate the account holder issued in advance, and the

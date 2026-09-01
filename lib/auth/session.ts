@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { sessions, users, type User } from "@/lib/db/schema";
 
 /**
- * Sessions — PLAN.md §10.3.
+ * Sessions
  *
  * A random 256-bit token lives in the user's cookie. Only its SHA-256 hash is
  * stored, so a leaked database hands over no usable sessions — the same

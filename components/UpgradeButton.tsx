@@ -6,7 +6,7 @@ import { useState } from "react";
 import { openCheckout } from "@/lib/checkout-client";
 
 /**
- * The plain, non-agent upgrade path — PLAN.md §2 step 5.
+ * The plain, non-agent upgrade path.
  *
  * This button exists for two reasons. A real product always has a manual way to
  * pay, so making the chat the only route would look staged. And because this

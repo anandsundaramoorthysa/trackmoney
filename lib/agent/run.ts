@@ -28,7 +28,8 @@ import {
 } from "./tools";
 
 /**
- * One turn of the agent — PLAN.md §6.6 and §6.8 wired together.
+ * One turn of the agent: the bounding rules and the grounding check, wired
+ * together.
  *
  * The shape of a turn is deliberate:
  *   1. the user's words are recorded verbatim,

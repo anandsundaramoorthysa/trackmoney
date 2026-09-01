@@ -9,7 +9,7 @@ import { payments, planConfig, users, type User } from "@/lib/db/schema";
 import { formatPaise } from "@/lib/money";
 
 /**
- * The one shared money function — PLAN.md §6.12 step 5.
+ * The one shared money function.
  *
  * `createProUpgradeOrder` is the ONLY place in this codebase that creates a
  * Razorpay order. The billing page button calls it and the agent's
@@ -48,7 +48,7 @@ export function razorpayCredentials(): { keyId: string; keySecret: string } {
   }
 
   if (!keyId.startsWith("rzp_test_")) {
-    // PLAN.md §4: test mode only, everywhere, always.
+    // test mode only, everywhere, always.
     throw new Error(
       "Refusing to start: RAZORPAY_KEY_ID is not a test-mode key. TrackMoney is a demo and must never be pointed at live keys.",
     );
@@ -307,7 +307,7 @@ export async function createProUpgradeOrder(
 }
 
 /**
- * Payment verification — PLAN.md §6.3.
+ * Payment verification
  *
  * Razorpay signs `order_id|payment_id` with the key secret. We recompute it and
  * compare in constant time. A payment is only ever treated as real if this

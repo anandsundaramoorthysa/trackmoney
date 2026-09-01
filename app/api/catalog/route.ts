@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * An agent-readable catalogue — PLAN.md §10.5.
+ * An agent-readable catalogue
  *
  * Track 1 asks for an agent that grows a merchant's revenue *or* one that makes
  * a merchant transactable by an AI buyer end to end. This is the second half:

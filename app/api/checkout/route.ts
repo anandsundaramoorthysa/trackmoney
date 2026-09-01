@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * The manual upgrade path — PLAN.md §2 step 5.
+ * The manual upgrade path.
  *
  * This is the route the plain "Upgrade to Pro" button on the billing page hits.
  * It calls `createProUpgradeOrder`, which is the same function the agent's tool

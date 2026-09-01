@@ -5,7 +5,7 @@ import { transactions } from "@/lib/db/schema";
 import { istMonthRange, shiftDays } from "@/lib/time";
 
 /**
- * Category breakdown — PLAN.md §10.4.
+ * Category breakdown
  *
  * Deterministic, like everything else the agent is allowed to talk about. The
  * previous month is fetched alongside so a change can be stated as a fact

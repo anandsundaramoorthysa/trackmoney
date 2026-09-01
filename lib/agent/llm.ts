@@ -1,5 +1,5 @@
 /**
- * Provider layer — PLAN.md §6.9.
+ * Provider layer
  *
  * Groq first, Gemini on any failure or timeout, and `null` if both are down.
  * `null` is not an error path: callers fall back to the deterministic template

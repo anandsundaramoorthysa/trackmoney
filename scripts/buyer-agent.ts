@@ -1,5 +1,5 @@
 /**
- * A buyer agent — PLAN.md §10.5.
+ * A buyer agent
  *
  * A separate party, not this project's assistant wearing another hat. It knows
  * nothing about TrackMoney beyond the URL: it reads the catalogue, works out

@@ -24,6 +24,12 @@ next-env.d.ts
 test-results/
 playwright-report/
 
+# Kept on disk, deliberately out of the public repo: the internal planning
+# notes and the test suite. Both stay in the working tree, so the suites still
+# run locally. README.md and docs/ are public and stay tracked.
+PLAN.md
+tests/
+
 # misc
 .DS_Store
 *.pem

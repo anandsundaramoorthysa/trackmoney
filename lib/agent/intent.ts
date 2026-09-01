@@ -1,5 +1,5 @@
 /**
- * Consent classification — PLAN.md §6.6, rule 2.
+ * Consent classification, rule 2.
  *
  * Consent is decided here, deterministically, before the model is called. The
  * LLM is never the thing that decides the user said yes, because a model that

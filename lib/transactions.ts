@@ -7,7 +7,7 @@ import { transactionDedupKey } from "@/lib/dedup";
 import { isRealDate, istMonthRange, istToday } from "@/lib/time";
 
 /**
- * Writing a transaction — PLAN.md §10.3.
+ * Writing a transaction
  *
  * This is the only place a transaction is created, so the plan's limit is
  * enforced here and cannot be sidestepped by a second code path. That matters

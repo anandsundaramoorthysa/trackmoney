@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { users, type User } from "@/lib/db/schema";
 
 /**
- * The demo identity — PLAN.md §6.2.
+ * The demo identity
  *
  * TrackMoney has no login. There is one seeded account and a "Reset demo data"
  * button. That is a deliberate scope decision, not an omission: a repo that

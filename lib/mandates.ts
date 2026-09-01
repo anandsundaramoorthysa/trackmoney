@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { purchaseMandates, type PurchaseMandate } from "@/lib/db/schema";
 
 /**
- * Purchase mandates — PLAN.md §10.5.
+ * Purchase mandates
  *
  * The human flow gates a money action on a person clicking. An AI buyer has
  * nobody to click, so the authority has to be granted in advance and carried:

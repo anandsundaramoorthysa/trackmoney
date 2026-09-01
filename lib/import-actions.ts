@@ -13,7 +13,7 @@ import { decodeRow, encodeRow, MAX_IMPORT_ROWS, type PreviewRow } from "@/lib/im
 import { addTransaction } from "@/lib/transactions";
 
 /**
- * Statement import — PLAN.md §10.4.
+ * Statement import
  *
  * Two steps, both server-rendered. The upload is parsed and shown back as a
  * preview with plain checkboxes; nothing is written until the second form is

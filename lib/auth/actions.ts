@@ -28,7 +28,7 @@ import {
 import { createSession, destroyAllSessions, destroySession } from "./session";
 
 /**
- * Authentication, as server actions — PLAN.md §10.3.
+ * Authentication, as server actions
  *
  * Every flow is a plain form post handled on the server, so the whole of
  * authentication works with JavaScript disabled and no credential is ever

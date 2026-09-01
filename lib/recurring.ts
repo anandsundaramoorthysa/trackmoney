@@ -5,7 +5,7 @@ export type RecurringCandidate = {
 };
 
 /**
- * Recurring-subscription detection — PLAN.md §3: deliberately a rule, not ML.
+ * Recurring-subscription detection: deliberately a rule, not ML.
  *
  * A merchant counts as recurring when it charged the exact same amount in two
  * or more distinct calendar months. The intelligence this project is judged on
