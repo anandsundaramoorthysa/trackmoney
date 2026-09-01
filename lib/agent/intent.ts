@@ -40,6 +40,7 @@ const HARD_NEGATIVE = [
  * question.
  */
 const SOFT_NEGATIVE = [
+  /\bnot\b/,
   /\blater\b/,
   /\bdon'?t\b/,
   /\bdo not\b/,
@@ -89,7 +90,7 @@ const QUESTION_WORDS = [
  * refusal test runs.
  */
 const NOT_A_REFUSAL =
-  /\bno (problem|worries|worry|doubt|issue|issues|idea|rush|hurry|need|objection)\b/g;
+  /\bno(t a|t an|t)? (problem|worries|worry|doubt|issue|issues|idea|rush|hurry|need|objection)\b/g;
 
 export function classifyIntent(message: string): Intent {
   const text = message.toLowerCase().trim();
@@ -106,7 +107,12 @@ export function classifyIntent(message: string): Intent {
   // A message carrying both a refusal and an agreement is not evidence of
   // either. Both outcomes here are costly — one charges someone, the other
   // closes the conversation for good — so a conflict resolves to neither.
-  if (saysNo && saysYes) return "unclear";
+  //
+  // A softer negation counts here too. "I'm not sure" is the ordinary way to
+  // express doubt, and it contains "sure": read as an agreement, it authorised
+  // a ₹499 charge on the strength of somebody hesitating. It is not a
+  // refusal either, so the answer is neither, and the person gets asked again.
+  if ((saysNo || mentionsNot) && saysYes) return "unclear";
 
   // An outright no ends it, question attached or not.
   if (saysNo) return "negative";
