@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { DEMO_USER_EMAIL } from "@/lib/demo";
+import { refreshDemoIfMonthRolled } from "@/lib/demo-refresh";
 import {
   assessPassword,
   burnPasswordTime,
@@ -150,6 +151,8 @@ export async function demoSignInAction(): Promise<void> {
     .limit(1);
 
   if (!demo) fail("/login", "The demo account has not been seeded yet.");
+
+  await refreshDemoIfMonthRolled(demo.id);
 
   await createSession(demo.id);
   redirect("/");

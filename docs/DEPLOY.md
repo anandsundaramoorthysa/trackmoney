@@ -60,6 +60,15 @@ Then in the browser:
 - Run `npm run check:providers` on the day. Hosted model catalogues change
   without notice, and that failure is silent.
 
+## If the demo looks empty
+
+The seed lays its data out relative to the day it runs — this month, last
+month, the one before — so an account seeded in one month has nothing in the
+current one once the calendar turns over. Signing in through **Try the demo
+account** now notices an empty month and refills it, so this should heal
+itself. If you ever want to force it, `npm run db:seed` against the deployed
+database does the same thing.
+
 ## Notes
 
 - `ALLOW_DEMO_LOGIN=false` disables the one-click demo account. Leave it unset
