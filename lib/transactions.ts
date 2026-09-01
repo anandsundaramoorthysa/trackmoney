@@ -1,4 +1,4 @@
-import { and, count, eq, gte, lt, sql } from "drizzle-orm";
+import { and, count, eq, gt, gte, lt, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { monthQuota, planConfig, transactions, type User } from "@/lib/db/schema";
@@ -205,31 +205,87 @@ async function reserveMonthSlot(
   cap: number,
   countedSoFar: number,
 ): Promise<boolean> {
-  const reserved = await db
-    .insert(monthQuota)
-    .values({ userId, month, used: countedSoFar + 1 })
-    .onConflictDoUpdate({
-      target: [monthQuota.userId, monthQuota.month],
-      set: { used: sql`${monthQuota.used} + 1` },
-      setWhere: sql`${monthQuota.used} < ${cap}`,
-    })
+  const take = async () =>
+    (
+      await db
+        .insert(monthQuota)
+        .values({ userId, month, used: countedSoFar + 1 })
+        .onConflictDoUpdate({
+          target: [monthQuota.userId, monthQuota.month],
+          set: { used: sql`${monthQuota.used} + 1`, updatedAt: new Date() },
+          setWhere: sql`${monthQuota.used} < ${cap}`,
+        })
+        .returning({ used: monthQuota.used })
+    ).length > 0;
+
+  if (await take()) return true;
+
+  // The month is full as far as the counter is concerned. That is either true,
+  // or the counter is holding a slot nothing ever claimed.
+  return (await reclaimStrandedSlots(userId, month, cap, countedSoFar))
+    ? take()
+    : false;
+}
+
+/**
+ * How long a reservation may outlive the row it promised.
+ *
+ * Reserving and inserting are two statements, and every ordinary failure
+ * between them releases on the way out. A process killed in that gap cannot,
+ * and the slot would then be spoken for by nothing until the month ended.
+ *
+ * A whole minute is far longer than the gap it is covering — the two statements
+ * run back to back — so a reservation still older than this is not in flight,
+ * it is abandoned.
+ */
+const STRANDED_AFTER_MS = 60_000;
+
+/**
+ * Put back slots that were reserved by requests that never wrote anything.
+ *
+ * The comparison that matters is the counter against the rows actually on disk.
+ * Doing it on age alone would be wrong: during a burst, several reservations
+ * legitimately sit above the row count for a few milliseconds, and reclaiming
+ * those would let the cap be exceeded — the exact bug this counter exists to
+ * prevent. Hence both conditions, and hence the compare-and-swap: two requests
+ * reconciling at once, only one may win, and the loser simply retries against
+ * the value the winner left.
+ */
+async function reclaimStrandedSlots(
+  userId: string,
+  month: string,
+  cap: number,
+  actualRows: number,
+): Promise<boolean> {
+  if (actualRows >= cap) return false;
+
+  const corrected = await db
+    .update(monthQuota)
+    .set({ used: actualRows, updatedAt: new Date() })
+    .where(
+      and(
+        eq(monthQuota.userId, userId),
+        eq(monthQuota.month, month),
+        gt(monthQuota.used, actualRows),
+        lt(monthQuota.updatedAt, new Date(Date.now() - STRANDED_AFTER_MS)),
+      ),
+    )
     .returning({ used: monthQuota.used });
 
-  return reserved.length > 0;
+  return corrected.length > 0;
 }
 
 /**
  * Hand a slot back.
  *
  * Every path out of `addTransaction` after a successful reservation releases on
- * the way — a duplicate, a bad write, anything thrown. Only the process being
- * killed between the two statements can leave a slot spoken for, and the next
- * month starts clean.
+ * the way — a duplicate, a bad write, anything thrown. A process killed between
+ * the two statements cannot, which is what `reclaimStrandedSlots` is for.
  */
 async function releaseMonthSlot(userId: string, month: string): Promise<void> {
   await db
     .update(monthQuota)
-    .set({ used: sql`greatest(${monthQuota.used} - 1, 0)` })
+    .set({ used: sql`greatest(${monthQuota.used} - 1, 0)`, updatedAt: new Date() })
     .where(and(eq(monthQuota.userId, userId), eq(monthQuota.month, month)));
 }
 

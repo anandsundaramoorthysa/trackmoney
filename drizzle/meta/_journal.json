@@ -43,6 +43,13 @@
       "when": 1787806478441,
       "tag": "0005_yielding_roxanne_simpson",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788278531210,
+      "tag": "0006_windy_bullseye",
+      "breakpoints": true
     }
   ]
 }

@@ -198,6 +198,18 @@ export const monthQuota = pgTable(
     /** "2026-08" — the month a transaction belongs to, not the month it was entered. */
     month: text("month").notNull(),
     used: integer("used").notNull().default(0),
+    /**
+     * When this counter last moved.
+     *
+     * A reservation that is about to become a row and one that was stranded by
+     * a killed process look identical from the outside — both are a count
+     * higher than the rows on disk. The difference is how long they stay that
+     * way: the first resolves in milliseconds, the second forever. This is what
+     * lets the reservation tell them apart.
+     */
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => [primaryKey({ columns: [table.userId, table.month] })],
 );
