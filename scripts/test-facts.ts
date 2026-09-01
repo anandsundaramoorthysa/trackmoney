@@ -5,6 +5,7 @@ import { classifyIntent } from "@/lib/agent/intent";
 import type { UsageFacts } from "@/lib/facts";
 import { formatPaise } from "@/lib/money";
 import { csvCell } from "@/lib/csv";
+import { handleRouteError } from "@/lib/api-errors";
 import {
   normaliseDate,
   parseAmountToPaise,
@@ -26,15 +27,45 @@ import { isRealDate, istMonthRange, istToday } from "@/lib/time";
 let passed = 0;
 let failed = 0;
 
-function test(name: string, fn: () => void) {
+/**
+ * Tests that have not finished yet.
+ *
+ * This runner used to call `fn()` and move on. An async test returned a promise
+ * nobody held, so its assertions could not fail the run — it was counted as
+ * passing before it had done anything, and a rejection surfaced later as an
+ * unhandled warning next to a green summary. A test that cannot fail is worse
+ * than no test, because it is believed.
+ */
+const pending: Promise<void>[] = [];
+
+function pass(name: string) {
+  passed += 1;
+  console.log(`  ok   ${name}`);
+}
+
+function fail(name: string, error: unknown) {
+  failed += 1;
+  console.error(`  FAIL ${name}`);
+  console.error(`       ${error instanceof Error ? error.message : error}`);
+}
+
+function test(name: string, fn: () => void | Promise<void>) {
   try {
-    fn();
-    passed += 1;
-    console.log(`  ok   ${name}`);
+    const running = fn();
+
+    if (running && typeof (running as Promise<void>).then === "function") {
+      pending.push(
+        (running as Promise<void>).then(
+          () => pass(name),
+          (error: unknown) => fail(name, error),
+        ),
+      );
+      return;
+    }
+
+    pass(name);
   } catch (error) {
-    failed += 1;
-    console.error(`  FAIL ${name}`);
-    console.error(`       ${error instanceof Error ? error.message : error}`);
+    fail(name, error);
   }
 }
 
@@ -446,6 +477,40 @@ test("\"why not\" is agreement, unless it is actually being asked", () => {
   assert.equal(classifyIntent("why not upgrade?"), "question");
 });
 
+test("a failing route does not describe the database to the caller", async () => {
+  /**
+   * A Drizzle failure carries the whole statement — every column name, and the
+   * parameter values with it. Returning that put the schema and a row of
+   * somebody's data in the browser of anyone who could make a request fail.
+   */
+  const dbError = new Error(
+    'Failed query: insert into "transactions" ("id", "user_id", "merchant") values ($1, $2, $3) params: 0be8e9d5,Swiggy,499',
+  );
+  const response = handleRouteError(dbError);
+  const body = (await response.json()) as { error?: string };
 
-console.log(`\n${passed} passed, ${failed} failed\n`);
-if (failed > 0) process.exit(1);
+  assert.equal(response.status, 500);
+  assert.doesNotMatch(body.error ?? "", /insert into|user_id|params|Swiggy/);
+});
+
+test("the setup hints still say what is actually wrong", async () => {
+  // These describe missing configuration, not anybody's data, and a fresh
+  // clone is unusable without them.
+  const missing = handleRouteError(new Error("DATABASE_URL is not set."));
+  const body = (await missing.json()) as { error?: string; setupRequired?: boolean };
+
+  assert.equal(missing.status, 503);
+  assert.equal(body.setupRequired, true);
+  assert.match(body.error ?? "", /DATABASE_URL/);
+
+  const unauth = handleRouteError(new Error("Not signed in."));
+  assert.equal(unauth.status, 401);
+});
+
+
+void (async () => {
+  await Promise.all(pending);
+
+  console.log(`\n${passed} passed, ${failed} failed\n`);
+  if (failed > 0) process.exit(1);
+})();
