@@ -84,3 +84,66 @@ export function isRealDate(value: string): boolean {
     asDate.getUTCDate() === d
   );
 }
+
+/**
+ * The window for a named month, rather than for today's month.
+ *
+ * Everything used to be computed from the clock, which meant the app could only
+ * ever show the month it happened to be. Importing a statement from an earlier
+ * one wrote the rows correctly and then displayed them nowhere — the ledger,
+ * the breakdown and the export were all pinned to "now". A month has to be
+ * something the caller can name.
+ */
+export function monthRangeOf(month: string): {
+  start: string;
+  endExclusive: string;
+  label: string;
+} {
+  const [year, index] = month.split("-").map(Number);
+  const nextYear = index === 12 ? year + 1 : year;
+  const nextMonth = index === 12 ? 1 : index + 1;
+
+  return {
+    start: isoDate(year, index, 1),
+    endExclusive: isoDate(nextYear, nextMonth, 1),
+    label: new Intl.DateTimeFormat("en-IN", {
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(new Date(Date.UTC(year, index - 1, 1))),
+  };
+}
+
+/** Is this a month the app can show? "2026-13" and "banana" are not. */
+export function isRealMonth(value: string): boolean {
+  if (!/^\d{4}-\d{2}$/.test(value)) return false;
+
+  const index = Number(value.slice(5));
+  return index >= 1 && index <= 12;
+}
+
+/** "2026-09" shifted by whole months, either direction. */
+export function shiftMonths(month: string, by: number): string {
+  const [year, index] = month.split("-").map(Number);
+  const zeroBased = year * 12 + (index - 1) + by;
+
+  return `${String(Math.floor(zeroBased / 12)).padStart(4, "0")}-${String(
+    (zeroBased % 12) + 1,
+  ).padStart(2, "0")}`;
+}
+
+/**
+ * Which month a request is asking for.
+ *
+ * Anything unreadable falls back to the current one rather than erroring: a
+ * hand-edited address should show the app, not a stack trace. Months ahead of
+ * the current one are refused for the same reason the date field refuses them —
+ * there is nothing there yet, and offering to page into an empty future is a
+ * promise the data cannot keep.
+ */
+export function resolveMonth(requested: string | undefined, now = new Date()): string {
+  const current = istMonthRange(now).start.slice(0, 7);
+  if (!requested || !isRealMonth(requested)) return current;
+
+  return requested > current ? current : requested;
+}

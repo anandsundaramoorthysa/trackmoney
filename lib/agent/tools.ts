@@ -1,5 +1,11 @@
 import { logAgentEvent } from "@/lib/audit";
 import type { Conversation, User } from "@/lib/db/schema";
+import { formatPaise } from "@/lib/money";
+import {
+  readProposal,
+  type ProposalDraft,
+  type TransactionProposal,
+} from "@/lib/agent/proposal";
 import type { UsageFacts } from "@/lib/facts";
 import { createProUpgradeOrder } from "@/lib/razorpay";
 import { hasAffirmativeAfterSuggestion, setConversationState } from "./conversation";
@@ -8,7 +14,7 @@ import { checkoutReadyTemplate } from "./grounding";
 /**
  * The toolset
  *
- * Two tools exist. Nothing else is callable, and the enforcement below runs in
+ * Three tools exist. Nothing else is callable, and the enforcement below runs in
  * the handler rather than in the prompt, because a system prompt asking a model
  * to behave is a request, not a boundary. Every rule here holds even if the
  * model is jailbroken, confused, or replaced tomorrow with a worse one.
@@ -17,7 +23,11 @@ import { checkoutReadyTemplate } from "./grounding";
  * `createProUpgradeOrder`, because they apply to human callers too.
  */
 
-export const TOOL_NAMES = ["explainSuggestion", "createCheckoutOrder"] as const;
+export const TOOL_NAMES = [
+  "explainSuggestion",
+  "createCheckoutOrder",
+  "proposeTransaction",
+] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
 export function isToolName(value: unknown): value is ToolName {
@@ -31,7 +41,13 @@ export type ToolContext = {
 };
 
 export type ToolOutcome =
-  | { status: "ran"; tool: ToolName; reply?: string; checkout?: CheckoutHandoff }
+  | {
+      status: "ran";
+      tool: ToolName;
+      reply?: string;
+      checkout?: CheckoutHandoff;
+      proposal?: TransactionProposal;
+    }
   | { status: "refused"; tool: string; rule: string; message: string };
 
 export type CheckoutHandoff = {
@@ -156,4 +172,43 @@ export async function runCreateCheckoutOrder(
       reused: result.reused,
     },
   };
+}
+
+/**
+ * Tool 3 — proposeTransaction.
+ *
+ * Drafts a ledger row from what the person said and stops. Nothing is written
+ * here: the proposal goes back as a card they can edit and confirm, and the
+ * confirm step re-reads every field before `addTransaction` sees it.
+ *
+ * The bound worth stating is what this tool cannot do. It cannot save, so a
+ * model that decides to be helpful and "just add it" writes nothing. It cannot
+ * spend, because it has no path to an order. And a draft it fills with nonsense
+ * becomes no card at all rather than a plausible-looking row waiting for a
+ * distracted tap.
+ */
+export async function runProposeTransaction(
+  ctx: ToolContext,
+  draft: ProposalDraft,
+): Promise<ToolOutcome> {
+  const proposal = readProposal(draft);
+
+  if (!proposal) {
+    return refuse(
+      ctx,
+      "proposeTransaction",
+      "unreadable_draft",
+      "I could not make a transaction out of that. Tell me the amount and what it was for.",
+    );
+  }
+
+  await logAgentEvent({
+    userId: ctx.user.id,
+    conversationId: ctx.conversation.id,
+    type: "agent_reply",
+    explanation: `Drafted ${formatPaise(proposal.amountPaise)} at ${proposal.merchant} on ${proposal.occurredOn}, filed under ${proposal.category}. Nothing is saved until it is confirmed.`,
+    meta: { tool: "proposeTransaction", stage: "drafted", moneyMoved: false },
+  });
+
+  return { status: "ran", tool: "proposeTransaction", proposal };
 }

@@ -4,14 +4,29 @@ import { requireUser } from "@/lib/auth/guard";
 import { computeUsageFacts } from "@/lib/facts";
 import { computeMonthInsights, FREE_CATEGORY_LIMIT } from "@/lib/insights";
 import { formatPaise } from "@/lib/money";
+import { istMonthRange, resolveMonth } from "@/lib/time";
+import { monthsWithActivity } from "@/lib/transactions";
+import { EmptyMonthNotice, MonthNav } from "@/components/MonthNav";
 
 export const dynamic = "force-dynamic";
 
-export default async function InsightsPage() {
+export default async function InsightsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>;
+}) {
   const user = await requireUser();
-  const [facts, insights] = await Promise.all([
+
+  // The breakdown was pinned to the current month, so an imported statement
+  // from an earlier one had nowhere to be seen. It is chosen by the address
+  // now, exactly as the ledger is.
+  const currentMonth = istMonthRange().start.slice(0, 7);
+  const shownMonth = resolveMonth((await searchParams).month);
+
+  const [facts, insights, activity] = await Promise.all([
     computeUsageFacts(user),
-    computeMonthInsights(user.id),
+    computeMonthInsights(user.id, shownMonth),
+    monthsWithActivity(user.id),
   ]);
 
   const isPro = user.plan === "pro";
@@ -22,12 +37,30 @@ export default async function InsightsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-[-0.02em]">Insights</h1>
-        <p className="mt-1 text-sm text-muted">
-          {insights.monthLabel} · {formatPaise(insights.totalPaise)} spent
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-[-0.02em]">Insights</h1>
+          <p className="mt-1 text-sm text-muted">
+            {insights.monthLabel} · {formatPaise(insights.totalPaise)} spent
+          </p>
+        </div>
+        <MonthNav
+          month={shownMonth}
+          currentMonth={currentMonth}
+          earliestMonth={activity.earliest}
+          basePath="/insights"
+        />
       </div>
+
+      {insights.categories.length === 0 &&
+        activity.latest &&
+        activity.latest !== shownMonth && (
+          <EmptyMonthNotice
+            month={shownMonth}
+            nearest={activity.latest}
+            basePath="/insights"
+          />
+        )}
 
       <section className="overflow-hidden rounded-xl border border-line bg-surface">
         <h2 className="border-b border-line px-4 py-3 text-sm font-semibold">

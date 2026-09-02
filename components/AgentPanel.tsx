@@ -4,6 +4,9 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { openCheckout, type CheckoutOrder } from "@/lib/checkout-client";
+import { confirmProposalAction } from "@/lib/agent/confirm-actions";
+import { CATEGORIES } from "@/lib/categories";
+import type { TransactionProposal } from "@/lib/agent/proposal";
 
 type Message = {
   id: string;
@@ -21,6 +24,7 @@ type TurnResponse = {
   messages?: HistoryMessage[];
   provider: string;
   checkout: (CheckoutOrder & { reused: boolean }) | null;
+  proposal: TransactionProposal | null;
   toolRequested: string;
   toolOutcome: string;
   grounding: string;
@@ -32,6 +36,11 @@ type TurnResponse = {
  * Note what this panel does when the agent prepares an order: it renders a
  * separate button and stops. The agent cannot open Razorpay's checkout and
  * cannot complete a payment; a person has to do both.
+ *
+ * The height is tied to the viewport rather than fixed in pixels because this
+ * is now the whole of its own page: on a laptop that is roughly what a fixed
+ * 560px gave, and on a tall monitor it uses the room instead of leaving a gap
+ * under the last message. The floor keeps a few turns visible on a short one.
  */
 export function AgentPanel({
   profile,
@@ -43,6 +52,7 @@ export function AgentPanel({
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [checkout, setCheckout] = useState<(CheckoutOrder & { reused: boolean }) | null>(null);
+  const [proposal, setProposal] = useState<TransactionProposal | null>(null);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [meta, setMeta] = useState<string | null>(null);
@@ -145,6 +155,9 @@ export function AgentPanel({
       push({ id: `a-${Date.now()}`, role: "agent", text: turn.reply });
       setMeta(describeTurn(turn));
       if (turn.checkout) setCheckout(turn.checkout);
+      // A draft replaces whatever was on the card before, so an older
+      // suggestion cannot be confirmed by someone who has moved on.
+      setProposal(turn.proposal ?? null);
       // Once the user has said no, the offer goes with it. Leaving the button
       // under "I will not bring this up again" would contradict the sentence
       // directly above it.
@@ -196,7 +209,7 @@ export function AgentPanel({
   return (
     <section
       aria-label="TrackMoney assistant"
-      className="flex h-[560px] flex-col overflow-hidden rounded-xl border border-line bg-surface"
+      className="flex h-[70dvh] min-h-[480px] flex-col overflow-hidden rounded-xl border border-line bg-surface"
     >
       <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div className="flex items-center gap-2">
@@ -225,6 +238,94 @@ export function AgentPanel({
             </p>
           </div>
         ))}
+
+        {proposal && (
+          <form
+            action={async (form: FormData) => {
+              const result = await confirmProposalAction(form);
+              setProposal(null);
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: `confirm-${Date.now()}`,
+                  role: "agent" as const,
+                  text: result.message,
+                },
+              ]);
+            }}
+            className="rounded-xl border border-agent/40 bg-agent-tint p-3.5"
+          >
+            <p className="text-xs text-muted">
+              Drafted, not saved. Change anything before confirming.
+            </p>
+
+            <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-[11px] text-muted">Merchant</span>
+                <input
+                  name="merchant"
+                  defaultValue={proposal.merchant}
+                  required
+                  maxLength={80}
+                  className="w-full rounded-lg border border-line bg-canvas px-2.5 py-1.5 text-sm"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[11px] text-muted">Amount (₹)</span>
+                <input
+                  name="amount"
+                  defaultValue={(proposal.amountPaise / 100).toFixed(2)}
+                  required
+                  inputMode="decimal"
+                  className="w-full rounded-lg border border-line bg-canvas px-2.5 py-1.5 font-mono text-sm"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[11px] text-muted">Category</span>
+                <select
+                  name="category"
+                  defaultValue={proposal.category}
+                  className="w-full rounded-lg border border-line bg-canvas px-2.5 py-1.5 text-sm"
+                >
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[11px] text-muted">Date</span>
+                <input
+                  name="occurredOn"
+                  type="date"
+                  defaultValue={proposal.occurredOn}
+                  required
+                  className="w-full rounded-lg border border-line bg-canvas px-2.5 py-1.5 font-mono text-sm"
+                />
+              </label>
+            </div>
+
+            <div className="mt-2.5 flex gap-2">
+              <button
+                type="submit"
+                className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-strong"
+              >
+                Save this
+              </button>
+              <button
+                type="button"
+                onClick={() => setProposal(null)}
+                className="rounded-lg px-3 py-2 text-sm text-muted transition-colors hover:text-ink"
+              >
+                Discard
+              </button>
+            </div>
+          </form>
+        )}
 
         {checkout && (
           <div className="rounded-xl border border-agent/40 bg-agent-tint p-3.5">

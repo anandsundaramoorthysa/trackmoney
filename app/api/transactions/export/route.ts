@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { transactions } from "@/lib/db/schema";
 import { getAuthenticatedUser } from "@/lib/auth/session";
 import { paiseToRupeeNumber } from "@/lib/money";
-import { istMonthRange } from "@/lib/time";
+import { istMonthRange, monthRangeOf, resolveMonth } from "@/lib/time";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export const dynamic = "force-dynamic";
  * boundary — going through lib/money.ts, which is the only place allowed to
  * convert paise.
  */
-async function handleGET() {
+async function handleGET(request: Request) {
   const user = await getAuthenticatedUser();
 
   if (user.plan !== "pro") {
@@ -33,7 +33,19 @@ async function handleGET() {
     );
   }
 
-  const month = istMonthRange();
+  /**
+   * Export whichever month is being looked at.
+   *
+   * This always wrote the current month, so exporting while paged back to an
+   * earlier one silently handed over the wrong rows — the worst kind of wrong,
+   * because a CSV carries no sign of which month it came from until you read
+   * the dates.
+   */
+  const requested = new URL(request.url).searchParams.get("month") ?? undefined;
+  const shownMonth = resolveMonth(requested);
+  const month = monthRangeOf(shownMonth);
+  void istMonthRange;
+
   const rows = await db
     .select()
     .from(transactions)
@@ -66,9 +78,9 @@ async function handleGET() {
   });
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    return await handleGET();
+    return await handleGET(request);
   } catch (error) {
     return handleRouteError(error);
   }

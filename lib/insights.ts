@@ -2,7 +2,7 @@ import { and, eq, gte, lt, sum } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { transactions } from "@/lib/db/schema";
-import { istMonthRange, shiftDays } from "@/lib/time";
+import { istMonthRange, monthRangeOf, shiftDays } from "@/lib/time";
 
 /**
  * Category breakdown
@@ -58,8 +58,10 @@ async function totalsByCategory(
 
 export async function computeMonthInsights(
   userId: string,
+  /** Which month to describe, "2026-09". Defaults to the one it is now. */
+  forMonth?: string,
 ): Promise<MonthInsights> {
-  const month = istMonthRange();
+  const month = forMonth ? monthRangeOf(forMonth) : istMonthRange();
   const previousStart = shiftDays(month.start, -1).slice(0, 8) + "01";
 
   const [current, previous] = await Promise.all([

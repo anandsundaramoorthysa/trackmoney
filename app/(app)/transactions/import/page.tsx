@@ -158,7 +158,17 @@ export default async function ImportPage({
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-2 text-muted">{row.category}</td>
+                      <td className="px-4 py-2 text-muted">
+                        {row.category}
+                        {/* A category that appears with no explanation is one
+                            nobody trusts, and the point of a preview is to be
+                            able to disagree before anything is written. */}
+                        {row.matchedPattern && (
+                          <span className="ml-1.5 whitespace-nowrap text-xs text-brand">
+                            rule: {row.matchedPattern}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-2 text-right font-mono tabular">
                         {formatPaise(row.amountPaise)}
                       </td>

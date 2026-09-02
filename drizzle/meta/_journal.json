@@ -50,6 +50,13 @@
       "when": 1788278531210,
       "tag": "0006_windy_bullseye",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788313030054,
+      "tag": "0007_blue_songbird",
+      "breakpoints": true
     }
   ]
 }

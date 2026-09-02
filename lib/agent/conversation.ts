@@ -60,14 +60,31 @@ export async function hasAffirmativeAfterSuggestion(
     .where(
       and(
         eq(agentEvents.conversationId, conversationId),
-        inArray(agentEvents.type, ["suggestion", "intent", "checkout_created"]),
+        inArray(agentEvents.type, [
+          "suggestion",
+          "agent_reply",
+          "intent",
+          "checkout_created",
+        ]),
       ),
     )
     .orderBy(agentEvents.createdAt, agentEvents.id);
 
+  /**
+   * Was the upgrade explained here, whether as a pitch or as an answer?
+   *
+   * Both end by asking for a yes, so both are something a yes can refer to.
+   * Counting only the pitch left anyone who asked about Pro before being
+   * offered it unable to buy at all.
+   */
+  const explains = (row: (typeof rows)[number]) =>
+    row.type === "suggestion" ||
+    (row.type === "agent_reply" &&
+      (row.meta as { explainedUpgrade?: boolean } | null)?.explainedUpgrade === true);
+
   let consentIsLive = false;
   for (const row of rows) {
-    if (row.type === "suggestion") continue;
+    if (row.type === "suggestion" || row.type === "agent_reply") continue;
 
     // Creating an order spends the consent that authorised it.
     if (row.type === "checkout_created") {
@@ -80,7 +97,7 @@ export async function hasAffirmativeAfterSuggestion(
       // Only counts once something has been explained to agree to.
       consentIsLive = rows.some(
         (r) =>
-          r.type === "suggestion" &&
+          explains(r) &&
           (r.createdAt < row.createdAt ||
             (r.createdAt.getTime() === row.createdAt.getTime() && r.id < row.id)),
       );

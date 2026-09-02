@@ -9,6 +9,8 @@ import { parseTransactionsCsv } from "@/lib/csv-import";
 import { db } from "@/lib/db";
 import { importBatches, transactions } from "@/lib/db/schema";
 import { transactionDedupKey } from "@/lib/dedup";
+import { categoryFor } from "@/lib/categorize";
+import { listRules } from "@/lib/category-rules";
 import { decodeRow, encodeRow, MAX_IMPORT_ROWS, type PreviewRow } from "@/lib/import-encode";
 import { addTransaction } from "@/lib/transactions";
 
@@ -62,13 +64,34 @@ export async function previewImportAction(form: FormData): Promise<void> {
     );
   const known = new Set(existing.map((row) => row.dedupKey));
 
+  /**
+   * The account's own rules decide the category before anything is written.
+   *
+   * A statement almost never carries a usable category column, so without this
+   * every imported row arrived as "Other" and the breakdown — one of the things
+   * Pro is sold on — said nothing. The rule that matched is carried through to
+   * the preview so the page can show why a row was filed where it was, and the
+   * person can disagree before committing rather than after.
+   */
+  const rules = await listRules(user.id);
+
   // A file can also duplicate itself.
   const seen = new Set<string>();
   const preview: PreviewRow[] = parsed.rows.map((row, index) => {
     const key = keys[index];
     const duplicate = known.has(key) || seen.has(key);
     seen.add(key);
-    return { ...row, duplicate };
+
+    // A category named by the file is the person's own data and outranks a
+    // rule; rules exist to fill the silence, not to overrule a statement.
+    const matched = row.category === "Other" ? categoryFor(rules, row.merchant) : null;
+
+    return {
+      ...row,
+      category: matched?.category ?? row.category,
+      matchedPattern: matched?.rule.pattern ?? null,
+      duplicate,
+    };
   });
 
   // Yesterday's abandoned previews are of no use to anyone.

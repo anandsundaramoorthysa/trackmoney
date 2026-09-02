@@ -44,7 +44,9 @@ export default defineConfig({
       command: `next build && next start --port ${APP_PORT}`,
       url: `http://127.0.0.1:${APP_PORT}/billing`,
       reuseExistingServer: !process.env.CI,
-      timeout: 120_000,
+      // next build is the slow part and the app has grown; 120s was no longer
+      // enough and runs were dying before a single test executed.
+      timeout: 300_000,
       env: {
         DATABASE_URL: TEST_DATABASE_URL,
         RAZORPAY_KEY_ID: TEST_KEY_ID,

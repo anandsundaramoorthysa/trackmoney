@@ -5,6 +5,7 @@ import { classifyIntent } from "@/lib/agent/intent";
 import type { UsageFacts } from "@/lib/facts";
 import { formatPaise } from "@/lib/money";
 import { csvCell } from "@/lib/csv";
+import { categoryFor, suggestPattern, type CategoryRule } from "@/lib/categorize";
 import { handleRouteError } from "@/lib/api-errors";
 import {
   normaliseDate,
@@ -13,7 +14,15 @@ import {
   parseTransactionsCsv,
 } from "@/lib/csv-import";
 import { detectRecurring } from "@/lib/recurring";
-import { isRealDate, istMonthRange, istToday } from "@/lib/time";
+import {
+  isRealDate,
+  isRealMonth,
+  istMonthRange,
+  istToday,
+  monthRangeOf,
+  resolveMonth,
+  shiftMonths,
+} from "@/lib/time";
 
 /**
  * Tests for the parts that must not be wrong.
@@ -505,6 +514,125 @@ test("the setup hints still say what is actually wrong", async () => {
 
   const unauth = handleRouteError(new Error("Not signed in."));
   assert.equal(unauth.status, 401);
+});
+
+
+test("a named month has the same bounds the clock would have given it", () => {
+  const september = monthRangeOf("2026-09");
+  assert.equal(september.start, "2026-09-01");
+  assert.equal(september.endExclusive, "2026-10-01");
+  assert.equal(september.label, "September 2026");
+
+  // December has to roll into the next year, the same as the clock version.
+  const december = monthRangeOf("2026-12");
+  assert.equal(december.endExclusive, "2027-01-01");
+});
+
+test("months shift in both directions, across years", () => {
+  assert.equal(shiftMonths("2026-09", -1), "2026-08");
+  assert.equal(shiftMonths("2026-01", -1), "2025-12");
+  assert.equal(shiftMonths("2026-12", 1), "2027-01");
+  assert.equal(shiftMonths("2026-06", -18), "2024-12");
+  assert.equal(shiftMonths("2026-06", 18), "2027-12");
+});
+
+test("a month has to be a real one", () => {
+  assert.equal(isRealMonth("2026-09"), true);
+  assert.equal(isRealMonth("2026-13"), false);
+  assert.equal(isRealMonth("2026-00"), false);
+  assert.equal(isRealMonth("2026-9"), false);
+  assert.equal(isRealMonth("banana"), false);
+});
+
+test("an unreadable or future month falls back to the current one", () => {
+  const now = new Date("2026-09-15T06:00:00Z");
+  const current = istMonthRange(now).start.slice(0, 7);
+
+  // A hand-edited address should show the app, not an error.
+  assert.equal(resolveMonth("banana", now), current);
+  assert.equal(resolveMonth(undefined, now), current);
+  assert.equal(resolveMonth("2026-13", now), current);
+
+  // There is nothing in the future to page into.
+  assert.equal(resolveMonth("2027-03", now), current);
+
+  // A real past month is honoured.
+  assert.equal(resolveMonth("2026-07", now), "2026-07");
+});
+
+
+const rule = (
+  pattern: string,
+  category: string,
+  extra: Partial<CategoryRule> = {},
+): CategoryRule => ({
+  id: pattern,
+  pattern,
+  matchType: "contains",
+  category,
+  priority: 0,
+  enabled: true,
+  ...extra,
+});
+
+test("a merchant name finds its category", () => {
+  const rules = [rule("swiggy", "Food & Drink"), rule("uber", "Transport")];
+
+  assert.equal(categoryFor(rules, "SWIGGY BANGALORE")?.category, "Food & Drink");
+  assert.equal(categoryFor(rules, "Uber India")?.category, "Transport");
+  assert.equal(categoryFor(rules, "Some Shop"), null);
+});
+
+test("the more specific rule wins a tie", () => {
+  // Both match, and "swiggy instamart" is what the person meant. Nobody should
+  // have to reason about priority numbers to get this right.
+  const rules = [
+    rule("swiggy", "Food & Drink"),
+    rule("swiggy instamart", "Groceries"),
+  ];
+
+  assert.equal(
+    categoryFor(rules, "UPI/SWIGGY INSTAMART/12345")?.category,
+    "Groceries",
+  );
+});
+
+test("an explicit priority beats specificity", () => {
+  const rules = [
+    rule("swiggy instamart", "Groceries"),
+    rule("swiggy", "Food & Drink", { priority: 10 }),
+  ];
+
+  assert.equal(categoryFor(rules, "SWIGGY INSTAMART")?.category, "Food & Drink");
+});
+
+test("whole-word matching does not match inside a longer word", () => {
+  const rules = [rule("ola", "Transport", { matchType: "word" })];
+
+  assert.equal(categoryFor(rules, "OLA CABS")?.category, "Transport");
+  assert.equal(categoryFor(rules, "Motorola Service"), null);
+});
+
+test("a disabled rule decides nothing", () => {
+  const rules = [rule("swiggy", "Food & Drink", { enabled: false })];
+  assert.equal(categoryFor(rules, "SWIGGY"), null);
+});
+
+test("a rule naming a category that does not exist is ignored", () => {
+  // Categories are a fixed list. A rule pointing outside it would otherwise
+  // write a category the rest of the app cannot display or group.
+  const rules = [rule("swiggy", "Invented Category")];
+  assert.equal(categoryFor(rules, "SWIGGY"), null);
+});
+
+test("a suggested pattern is a word, not the whole reference", () => {
+  // Statement descriptions carry booking references that never repeat, so the
+  // whole string is useless as a pattern.
+  const suggestion = suggestPattern("UPI/442718/SWIGGY/PAYMENT");
+  assert.equal(suggestion?.pattern, "payment");
+  assert.equal(suggestion?.matchType, "word");
+
+  assert.equal(suggestPattern("123 456"), null);
 });
 
 

@@ -6,8 +6,9 @@ import { db } from "@/lib/db";
 import { transactions } from "@/lib/db/schema";
 import { computeUsageFacts } from "@/lib/facts";
 import { formatPaise } from "@/lib/money";
-import { istMonthRange, istToday } from "@/lib/time";
-import { CATEGORIES } from "@/lib/transactions";
+import { istMonthRange, istToday, monthRangeOf, resolveMonth } from "@/lib/time";
+import { CATEGORIES, monthsWithActivity } from "@/lib/transactions";
+import { EmptyMonthNotice, MonthNav } from "@/components/MonthNav";
 import {
   addTransactionAction,
   deleteTransactionAction,
@@ -26,13 +27,27 @@ export default async function TransactionsPage({
     imported?: string;
     skipped?: string;
     failed?: string;
+    month?: string;
   }>;
 }) {
   const user = await requireUser();
   const facts = await computeUsageFacts(user);
-  const month = istMonthRange();
-  const { error, added, deleted, capped, imported, skipped, failed } =
-    await searchParams;
+  const params = await searchParams;
+  const { error, added, deleted, capped, imported, skipped, failed } = params;
+
+  /**
+   * Which month is on screen.
+   *
+   * This page was pinned to the current one, so a statement imported from an
+   * earlier month wrote its rows and then showed none of them. The month is now
+   * part of the address, which also means a reload or a shared link lands in
+   * the same place.
+   */
+  const currentMonth = istMonthRange().start.slice(0, 7);
+  const shownMonth = resolveMonth(params.month);
+  const month = monthRangeOf(shownMonth);
+  const isCurrentMonth = shownMonth === currentMonth;
+  const activity = await monthsWithActivity(user.id);
 
   const rows = await db
     .select()
@@ -46,8 +61,12 @@ export default async function TransactionsPage({
     )
     .orderBy(desc(transactions.occurredOn), desc(transactions.createdAt));
 
+  // The Free row limit describes this month's allowance, so it has nothing to
+  // say about a month already in the past — those rows are all history.
   const visible =
-    facts.visibleTxnCap === null ? rows : rows.slice(0, facts.visibleTxnCap);
+    facts.visibleTxnCap === null || !isCurrentMonth
+      ? rows
+      : rows.slice(0, facts.visibleTxnCap);
   const hidden = rows.length - visible.length;
   // The server's own clock is UTC in production, so composing a date from it
   // put the form a day behind for anyone adding a transaction late in the
@@ -60,17 +79,37 @@ export default async function TransactionsPage({
         <div>
         <h1 className="text-2xl font-semibold tracking-[-0.02em]">Transactions</h1>
         <p className="mt-1 text-sm text-muted">
-          {month.label} · {facts.txnCountThisMonth} logged
+          {/* The count belongs to the month on screen. Reading the current
+              month's tally under a past month's heading would be a plain
+              untruth, and the allowance only means anything for this one. */}
+          {month.label} · {rows.length} logged
           {user.plan === "free" &&
+            isCurrentMonth &&
             ` · ${facts.remainingOnFree} of ${facts.freeTxnCap} left on Free`}
         </p>
         </div>
-        <Link
-          href="/transactions/import"
-          className="rounded-lg border border-line px-3 py-2 text-sm transition-colors hover:bg-brand-tint"
-        >
-          Import CSV{user.plan === "free" ? " (Pro)" : ""}
-        </Link>
+        <div className="flex items-center gap-3">
+          <MonthNav
+            month={shownMonth}
+            currentMonth={currentMonth}
+            earliestMonth={activity.earliest}
+            basePath="/transactions"
+          />
+          {user.plan === "pro" && rows.length > 0 && (
+            <a
+              href={`/api/transactions/export?month=${shownMonth}`}
+              className="rounded-lg border border-line px-3 py-2 text-sm transition-colors hover:bg-brand-tint"
+            >
+              Export CSV
+            </a>
+          )}
+          <Link
+            href="/transactions/import"
+            className="rounded-lg border border-line px-3 py-2 text-sm transition-colors hover:bg-brand-tint"
+          >
+            Import CSV{user.plan === "free" ? " (Pro)" : ""}
+          </Link>
+        </div>
       </div>
 
       {capped && (
@@ -84,7 +123,7 @@ export default async function TransactionsPage({
             <Link href="/billing" className="text-brand hover:underline">
               Upgrade to Pro
             </Link>{" "}
-            for unlimited, or ask the assistant on the dashboard.
+            for unlimited, or ask the assistant.
           </p>
         </div>
       )}
@@ -178,9 +217,19 @@ export default async function TransactionsPage({
           {month.label}
         </h2>
         {visible.length === 0 ? (
-          <p className="px-4 py-6 text-sm text-muted">
-            Nothing logged this month yet.
-          </p>
+          activity.latest && activity.latest !== shownMonth ? (
+            <div className="p-4">
+              <EmptyMonthNotice
+                month={shownMonth}
+                nearest={activity.latest}
+                basePath="/transactions"
+              />
+            </div>
+          ) : (
+            <p className="px-4 py-6 text-sm text-muted">
+              Nothing logged in {month.label} yet.
+            </p>
+          )
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   agentEvents,
+  categoryRules,
   conversations,
   monthQuota,
   payments,
@@ -212,6 +213,10 @@ export async function seedDatabase(): Promise<SeedSummary> {
   // The cap counter is derived from these rows, so it has to go with them or
   // the reseeded account would start its month already spoken for.
   await db.delete(monthQuota).where(eq(monthQuota.userId, user.id));
+  // Category rules are the account's own settings, and "reset demo data" means
+  // the account as it ships — not the account plus whatever a previous visitor
+  // taught it about their merchants.
+  await db.delete(categoryRules).where(eq(categoryRules.userId, user.id));
 
   const rows = [
     ...buildMonth(user.id, 0, [...RECURRING, ...CURRENT_MONTH_ONE_OFFS], {

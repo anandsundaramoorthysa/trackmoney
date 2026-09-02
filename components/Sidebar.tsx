@@ -13,22 +13,29 @@ import type { User } from "@/lib/db/schema";
  * hydration gap before it becomes usable.
  *
  * On small screens it becomes a horizontal strip above the content rather than
- * a drawer: five links do not justify a hidden menu, and anything hidden
+ * a drawer: six links do not justify a hidden menu, and anything hidden
  * behind a tap is something a reviewer might not find.
+ *
+ * From md up it is taken out of the flow entirely and pinned to the viewport,
+ * so the nav and the account footer stay reachable however far down a long
+ * ledger someone has scrolled. The offset that keeps the content clear of it
+ * lives in the layout.
  */
 
 const NAV = [
   { href: "/", label: "Dashboard", icon: GridIcon },
+  { href: "/assistant", label: "Assistant", icon: ChatIcon },
   { href: "/transactions", label: "Transactions", icon: ListIcon },
   { href: "/insights", label: "Insights", icon: ChartIcon },
+  { href: "/rules", label: "Category rules", icon: TagIcon },
   { href: "/billing", label: "Billing", icon: CardIcon },
   { href: "/agent-activity", label: "Agent activity", icon: TrailIcon },
 ];
 
 export function Sidebar({ user }: { user: User }) {
   return (
-    <aside className="border-b border-line bg-surface md:h-dvh md:w-60 md:shrink-0 md:border-b-0 md:border-r">
-      <div className="flex h-full flex-col md:sticky md:top-0">
+    <aside className="border-b border-line bg-surface md:fixed md:inset-y-0 md:left-0 md:z-30 md:w-60 md:border-b-0 md:border-r">
+      <div className="flex h-full flex-col">
         <div className="px-5 py-4">
           <Link href="/">
             <Logo />
@@ -76,7 +83,16 @@ export function Sidebar({ user }: { user: User }) {
   );
 }
 
-/* Inline icons — five small shapes are not worth an icon dependency. */
+function TagIcon() {
+  return base(
+    <>
+      <path d="M3 7.5V3h4.5L14 9.5 9.5 14Z" />
+      <circle cx="5.6" cy="5.6" r="1" />
+    </>,
+  );
+}
+
+/* Inline icons — six small shapes are not worth an icon dependency. */
 
 function base(children: React.ReactNode) {
   return (
@@ -104,6 +120,16 @@ function GridIcon() {
       <rect x="9" y="2" width="5" height="5" rx="1" />
       <rect x="2" y="9" width="5" height="5" rx="1" />
       <rect x="9" y="9" width="5" height="5" rx="1" />
+    </>,
+  );
+}
+
+function ChatIcon() {
+  return base(
+    <>
+      <rect x="2" y="2.5" width="12" height="9" rx="2" />
+      <path d="M5.5 11.5V14L8.5 11.5" />
+      <path d="M5 5.75h6M5 8.25h4" />
     </>,
   );
 }

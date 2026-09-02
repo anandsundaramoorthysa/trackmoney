@@ -5,6 +5,7 @@ import { monthQuota, planConfig, transactions, type User } from "@/lib/db/schema
 import { isUniqueViolation } from "@/lib/db/errors";
 import { transactionDedupKey } from "@/lib/dedup";
 import { isRealDate, istMonthRange, istToday } from "@/lib/time";
+import { CATEGORIES } from "@/lib/categories";
 
 /**
  * Writing a transaction
@@ -15,16 +16,9 @@ import { isRealDate, istMonthRange, istToday } from "@/lib/time";
  * rows to *display*, which meant the product advertised a limit it did not keep.
  */
 
-export const CATEGORIES = [
-  "Food & Drink",
-  "Groceries",
-  "Transport",
-  "Shopping",
-  "Utilities",
-  "Entertainment",
-  "Health",
-  "Other",
-] as const;
+// Re-exported so existing server-side imports keep working; the list itself
+// lives in a module the browser can import without pulling in the database.
+export { CATEGORIES };
 
 /**
  * The largest amount the column can hold.
@@ -90,6 +84,31 @@ export async function countInMonth(
       ),
     );
   return row?.total ?? 0;
+}
+
+/**
+ * The oldest and newest months this account has anything in.
+ *
+ * The month pager needs to know where to stop going back, and an empty month
+ * needs to be able to point at one that is not empty. Both are one question
+ * about the extremes, so it is one query rather than two.
+ */
+export async function monthsWithActivity(userId: string): Promise<{
+  earliest: string | null;
+  latest: string | null;
+}> {
+  const [row] = await db
+    .select({
+      earliest: sql<string | null>`min(${transactions.occurredOn})`,
+      latest: sql<string | null>`max(${transactions.occurredOn})`,
+    })
+    .from(transactions)
+    .where(eq(transactions.userId, userId));
+
+  return {
+    earliest: row?.earliest ? row.earliest.slice(0, 7) : null,
+    latest: row?.latest ? row.latest.slice(0, 7) : null,
+  };
 }
 
 export async function addTransaction(

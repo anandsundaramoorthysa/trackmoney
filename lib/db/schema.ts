@@ -214,6 +214,49 @@ export const monthQuota = pgTable(
   (table) => [primaryKey({ columns: [table.userId, table.month] })],
 );
 
+/**
+ * How a merchant name becomes a category.
+ *
+ * Without these, importing a statement leaves every row in whatever the file
+ * said — usually nothing — and a ledger where everything is "Other" is a
+ * ledger nobody reads twice. A rule is a pattern, how to compare it, and the
+ * category it wins.
+ *
+ * Rules belong to one account. There is no shared or global rule set on
+ * purpose: a merchant that means "Groceries" to one person means "Shopping" to
+ * another, and quietly categorising somebody's spending using a stranger's
+ * opinion of a merchant is not a thing to do by default.
+ */
+export const categoryRules = pgTable(
+  "category_rules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** What to look for in the merchant name, compared case-insensitively. */
+    pattern: text("pattern").notNull(),
+    matchType: text("match_type", {
+      enum: ["contains", "equals", "starts_with", "word"],
+    })
+      .notNull()
+      .default("contains"),
+    category: text("category").notNull(),
+    /** Higher wins; ties break on the longer, more specific pattern. */
+    priority: integer("priority").notNull().default(0),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // The same pattern twice for one account is a mistake rather than an
+    // intention, and it makes the "which rule decided this" answer ambiguous.
+    unique("category_rules_user_pattern").on(table.userId, table.pattern),
+    index("category_rules_user_idx").on(table.userId),
+  ],
+);
+
 export const payments = pgTable(
   "payments",
   {

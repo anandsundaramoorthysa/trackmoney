@@ -66,7 +66,7 @@ export default async function AgentActivityPage() {
 
         {events.length === 0 ? (
           <p className="rounded-xl border border-line bg-surface px-4 py-6 text-sm text-muted">
-            Nothing yet. Open the dashboard and talk to the assistant.
+            Nothing yet. Open the assistant and talk to it.
           </p>
         ) : (
           <ul className="overflow-hidden rounded-xl border border-line bg-surface">

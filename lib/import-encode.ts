@@ -11,7 +11,17 @@ import type { ParsedRow } from "@/lib/csv-import";
 
 export const MAX_IMPORT_ROWS = 300;
 
-export type PreviewRow = ParsedRow & { duplicate: boolean };
+export type PreviewRow = ParsedRow & {
+  duplicate: boolean;
+  /**
+   * The rule's pattern, when a rule chose this row's category.
+   *
+   * Carried so the preview can say why a row was filed where it was. A category
+   * that appears with no explanation is one nobody trusts, and the whole point
+   * of previewing is to disagree before anything is written.
+   */
+  matchedPattern?: string | null;
+};
 
 export function encodeRow(row: PreviewRow): string {
   return JSON.stringify([
@@ -20,13 +30,23 @@ export function encodeRow(row: PreviewRow): string {
     row.category,
     row.amountPaise,
     row.duplicate ? 1 : 0,
+    row.matchedPattern ?? null,
   ]);
 }
 
 export function decodeRow(value: string): PreviewRow | null {
   try {
-    const [occurredOn, merchant, category, amountPaise, duplicate] =
-      JSON.parse(value) as [string, string, string, number, number];
+    // The pattern was added after the first version of this format, so a row
+    // encoded before it simply has nothing at that position.
+    const [occurredOn, merchant, category, amountPaise, duplicate, matchedPattern] =
+      JSON.parse(value) as [
+        string,
+        string,
+        string,
+        number,
+        number,
+        string | null | undefined,
+      ];
 
     if (
       typeof occurredOn !== "string" ||
@@ -44,6 +64,7 @@ export function decodeRow(value: string): PreviewRow | null {
       category,
       amountPaise,
       duplicate: duplicate === 1,
+      matchedPattern: typeof matchedPattern === "string" ? matchedPattern : null,
     };
   } catch {
     return null;

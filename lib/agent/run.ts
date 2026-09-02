@@ -1,4 +1,5 @@
 import { logAgentEvent } from "@/lib/audit";
+import { formatPaise } from "@/lib/money";
 import type { Conversation, User } from "@/lib/db/schema";
 import { computeUsageFacts, hasUpgradeCase, type UsageFacts } from "@/lib/facts";
 import {
@@ -16,12 +17,14 @@ import {
   suggestionTemplate,
 } from "./grounding";
 import { classifyIntent, INTENT_EXPLANATION, type Intent } from "./intent";
+import type { TransactionProposal } from "@/lib/agent/proposal";
 import { callLLM, parseJsonLoosely, type LlmProvider } from "./llm";
 import { buildUserPrompt, SYSTEM_PROMPT } from "./prompt";
 import {
   isToolName,
   runCreateCheckoutOrder,
   runExplainSuggestion,
+  runProposeTransaction,
   type CheckoutHandoff,
   type ToolContext,
   type ToolName,
@@ -49,6 +52,14 @@ export type AgentTurnResult = {
   reply: string;
   provider: LlmProvider;
   checkout: CheckoutHandoff | null;
+  /**
+   * A transaction the agent drafted and did not write.
+   *
+   * Handed back so the panel can show an editable card. It stays a suggestion
+   * right up to the point somebody confirms it, and the confirm step re-reads
+   * every field rather than trusting what comes back.
+   */
+  proposal: TransactionProposal | null;
   toolRequested: ToolName | "none" | "unknown";
   toolOutcome: "ran" | "refused" | "not_requested";
   grounding: "passed" | "fell_back_to_template" | "template_only";
@@ -57,6 +68,8 @@ export type AgentTurnResult = {
 type ModelChoice = {
   reply: string | null;
   tool: string | null;
+  /** Fields for a drafted transaction, when the tool is proposeTransaction. */
+  draft?: Record<string, unknown> | null;
 };
 
 function groundOrFallback(
@@ -166,6 +179,7 @@ export async function runAgentTurn(input: {
         reply,
         provider: "template",
         checkout: null,
+    proposal: null,
         toolRequested: "createCheckoutOrder",
         toolOutcome: "refused",
         grounding: "template_only",
@@ -190,6 +204,7 @@ export async function runAgentTurn(input: {
         reply,
         provider: "template",
         checkout: null,
+    proposal: null,
         toolRequested: "none",
         toolOutcome: "not_requested",
         grounding: "template_only",
@@ -219,6 +234,7 @@ export async function runAgentTurn(input: {
       reply,
       provider: "template",
       checkout: null,
+    proposal: null,
       toolRequested: "none",
       toolOutcome: "not_requested",
       grounding: "template_only",
@@ -269,6 +285,7 @@ export async function runAgentTurn(input: {
   const ctx: ToolContext = { user, conversation, facts };
   let checkout: CheckoutHandoff | null = null;
   let toolOutcome: AgentTurnResult["toolOutcome"] = "not_requested";
+  let proposal: TransactionProposal | null = null;
   // Neither an account that already pays nor one that has said no should be
   // offered the upgrade again, so the fallback wording depends on both.
   const fallbackAnswer = () =>
@@ -295,6 +312,18 @@ export async function runAgentTurn(input: {
       // which means the wording it generated in the same breath IS that pitch.
       // Blocking the state change while still delivering the sentence would
       // enforce the rule on the bookkeeping and not on the user.
+      modelReply = null;
+    }
+  } else if (requested === "proposeTransaction") {
+    const outcome = await runProposeTransaction(ctx, choice?.draft ?? {});
+    if (outcome.status === "ran") {
+      toolOutcome = "ran";
+      // The card carries the numbers; whatever the model wrote alongside is
+      // still grounding-checked like any other sentence.
+      proposal = outcome.proposal ?? null;
+    } else {
+      toolOutcome = "refused";
+      deterministicReply = outcome.message;
       modelReply = null;
     }
   } else if (requested === "createCheckoutOrder") {
@@ -335,6 +364,27 @@ export async function runAgentTurn(input: {
 
   const grounded = groundOrFallback(modelReply, deterministicReply, facts);
 
+  /**
+   * Did this reply actually explain the upgrade?
+   *
+   * The pitch is not the only way the agent explains Pro. Asked "what does Pro
+   * include?", it answers with the price, the features, and "tell me yes if you
+   * want me to prepare the checkout" — an explanation and an invitation, just
+   * not a pitch. Only the pitch marked the conversation as pitched, so the yes
+   * that answer asked for mapped to no tool at all and was refused with "I do
+   * not have a clear yes on record yet". The agent asked a question it could
+   * not accept the answer to, and asking again did the same thing forever.
+   *
+   * Quoting the price is the test: it is the thing a yes commits to, and the
+   * opening line on a healthy account ("nothing to flag right now") does not
+   * quote it and deliberately does not qualify.
+   */
+  const explainedUpgrade =
+    eventType === "suggestion" ||
+    (user.plan === "free" &&
+      conversation.state !== "declined" &&
+      grounded.text.includes(formatPaise(facts.proPricePaise)));
+
   await logAgentEvent({
     userId: user.id,
     conversationId: conversation.id,
@@ -346,20 +396,32 @@ export async function runAgentTurn(input: {
       toolRequested: requested,
       toolOutcome,
       grounding: grounded.grounding,
+      explainedUpgrade,
       ...(grounded.offending.length
         ? { ungroundedNumbers: grounded.offending }
         : {}),
     },
   });
 
+  // Having explained the upgrade, the conversation is past the point where a
+  // yes would be premature — so record that, or the next yes has no tool to
+  // reach for.
+  const nextState =
+    explainedUpgrade && conversation.state === "open"
+      ? "pitched"
+      : conversation.state;
+
+  if (nextState !== conversation.state) {
+    await setConversationState(conversation.id, nextState);
+  }
+
   return {
     conversationId: conversation.id,
-    state: toolOutcome === "ran" && requested === "explainSuggestion"
-      ? "pitched"
-      : conversation.state,
+    state: nextState,
     reply: grounded.text,
     provider,
     checkout,
+    proposal,
     toolRequested: requested,
     toolOutcome,
     grounding: grounded.grounding,
