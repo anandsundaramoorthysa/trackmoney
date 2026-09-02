@@ -4,7 +4,7 @@ import { Field, FormMessage, SubmitButton } from "@/components/auth/Field";
 import { resetPasswordAction } from "@/lib/auth/actions";
 import { requireGuest } from "@/lib/auth/guard";
 import { RESET_TTL_MINUTES } from "@/lib/auth/reset";
-import { RESET_CODE_COOKIE, readOnce } from "@/lib/one-time-cookie";
+import { RESET_CODE_COOKIE, peekValue } from "@/lib/one-time-cookie";
 
 export const dynamic = "force-dynamic";
 
@@ -14,14 +14,17 @@ export default async function ResetPasswordPage({
   searchParams: Promise<{ token?: string; code?: string; error?: string }>;
 }) {
   await requireGuest();
-  const { token: fromLink, code: nonce, error } = await searchParams;
+  const { token: fromLink, error } = await searchParams;
 
   /**
    * The cookie is this demo's channel; the query parameter is what a real
    * emailed reset link would carry. Both are accepted, and neither is generated
    * into a URL by this application.
    */
-  const token = (await readOnce(RESET_CODE_COOKIE, nonce)) ?? fromLink;
+  // The cookie first, a link's own token second. A real reset email would
+  // carry the token in the link; the cookie is how this demo hands it over
+  // without writing a fifteen-minute secret into browser history.
+  const token = (await peekValue(RESET_CODE_COOKIE)) ?? fromLink;
 
   if (!token) {
     return (

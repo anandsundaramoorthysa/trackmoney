@@ -8,6 +8,7 @@ import {
 } from "@/lib/import-actions";
 import { MAX_IMPORT_ROWS } from "@/lib/import-encode";
 import { formatPaise } from "@/lib/money";
+import { ROW_REFUSAL_LABELS } from "@/lib/transactions";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,9 @@ export default async function ImportPage({
   const rows = batch?.rows ?? [];
   const ignored = batch?.ignored ?? 0;
   const duplicates = rows.filter((row) => row.duplicate).length;
+  // Rows the commit will refuse. Counted apart from duplicates: one is a
+  // row the account already has, the other is a row the rules will not take.
+  const refused = rows.filter((row) => row.refusal).length;
 
   return (
     <div className="space-y-6">
@@ -100,6 +104,12 @@ export default async function ImportPage({
               <span className="text-muted">Rows read </span>
               <span className="font-mono tabular">{rows.length}</span>
             </span>
+            {refused > 0 && (
+              <>
+                <span className="text-muted"> · Cannot be imported </span>
+                <span className="font-mono tabular text-bad">{refused}</span>
+              </>
+            )}
             {duplicates > 0 && (
               <span className="rounded-lg border border-agent/40 bg-agent-tint px-3 py-1.5">
                 <span className="text-muted">Already have </span>
@@ -115,7 +125,9 @@ export default async function ImportPage({
           </div>
 
           <p className="text-sm text-muted">
-            Rows you already have are unticked. Tick one to import it anyway.
+            Rows you already have are unticked — tick one to import it anyway.
+            Rows the app will not accept are unticked and cannot be ticked;
+            the reason is shown beside each.
           </p>
 
           <section className="overflow-hidden rounded-xl border border-line bg-surface">
@@ -135,7 +147,11 @@ export default async function ImportPage({
                     <tr
                       key={`${row.occurredOn}-${row.merchant}-${index}`}
                       className={`border-b border-line/60 last:border-0 ${
-                        row.duplicate ? "bg-agent-tint/40" : ""
+                        row.refusal
+                          ? "bg-bad/5"
+                          : row.duplicate
+                            ? "bg-agent-tint/40"
+                            : ""
                       }`}
                     >
                       <td className="px-4 py-2">
@@ -143,7 +159,12 @@ export default async function ImportPage({
                           type="checkbox"
                           name="include"
                           value={index}
-                          defaultChecked={!row.duplicate}
+                          defaultChecked={!row.duplicate && !row.refusal}
+                          // A row the commit will refuse must not be
+                          // offered. Leaving it tickable invites somebody
+                          // to tick it and then be told the file could not
+                          // be read.
+                          disabled={Boolean(row.refusal)}
                           aria-label={`Import ${row.merchant} on ${row.occurredOn}`}
                         />
                       </td>
@@ -152,6 +173,17 @@ export default async function ImportPage({
                       </td>
                       <td className="px-4 py-2">
                         {row.merchant}
+                        {/*
+                          Its own line, not a trailing span. Inline, the
+                          text ran into the merchant — "Metro Card
+                          Topupdated in the future" — which reads badly and
+                          leaves the cell with that as its accessible name.
+                        */}
+                        {row.refusal && (
+                          <span className="mt-0.5 block text-xs text-bad">
+                            {ROW_REFUSAL_LABELS[row.refusal]}
+                          </span>
+                        )}
                         {row.duplicate && (
                           <span className="ml-2 rounded-full bg-agent-tint px-2 py-0.5 text-[11px] text-agent">
                             already have this

@@ -1,5 +1,7 @@
 "use server";
 
+import crypto from "node:crypto";
+
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
@@ -24,6 +26,7 @@ import {
   RESET_CODE_COOKIE,
   clearOnce,
   stashOnce,
+  stashValue,
 } from "@/lib/one-time-cookie";
 import { createSession, destroyAllSessions, destroySession } from "./session";
 
@@ -163,7 +166,24 @@ export async function signOutAction(): Promise<void> {
   redirect("/login");
 }
 
+/**
+ * Is the demo allowed to print a reset code on screen?
+ *
+ * There is no mail provider here, so without this the reset flow cannot be
+ * demonstrated at all. It is off unless explicitly switched on, and when it is
+ * on it prints a code for *every* address — a real one for an account that
+ * exists, a decoy for one that does not. Either way the page is the same shape,
+ * which is the whole point: the affordance must not become the oracle.
+ */
+function showsDemoCode(): boolean {
+  return process.env.SHOW_DEMO_RESET_CODE === "true";
+}
+
+/** The floor every reset request is padded up to, whatever it actually did. */
+const RESET_FLOOR_MS = 700;
+
 export async function requestResetAction(form: FormData): Promise<void> {
+  const started = Date.now();
   const email = readEmail(form);
 
   const [user] = await db
@@ -173,39 +193,62 @@ export async function requestResetAction(form: FormData): Promise<void> {
     .limit(1);
 
   /**
-   * Always the same answer, whatever is true of the address.
+   * One answer, byte for byte, whoever asks.
    *
-   * `?sent=1` carries no nonce, so the confirmation page can read nothing out
-   * of the cookie — including a code issued moments earlier for a different
-   * address, which it used to display as though it belonged to this one.
+   * This used to redirect a registered address to `?sent=<handle>` and an
+   * unregistered one to `?sent=1`, then render a code and a "continue" link for
+   * the first and neither for the second. The prose said the right thing — "if
+   * that address has an account" — while the URL, the page and the response
+   * size all said the opposite. Anyone could test an address and learn whether
+   * it belonged to somebody.
    *
-   * The work is roughly matched too: the unknown path pays for one hash so the
-   * two do not differ by an obvious margin.
+   * Three things have to match, not one: where it redirects, what it renders,
+   * and how long it took.
    */
-  if (!user || !user.passwordHash) {
+  const isReal = Boolean(user && user.passwordHash);
+  const overLimit = isReal && (await recentResetCount(user!.id)) >= 3;
+
+  // The hash runs on every path. On the real path it is the cost the account
+  // would have paid anyway; on the others it is there so the two are alike.
+  if (!isReal || overLimit) {
     await burnPasswordTime(email);
-    redirect("/forgot-password?sent=1");
   }
 
-  // Over the limit answers exactly like an unknown address. Saying "too many
-  // requests" only to registered addresses told an attacker which ones exist.
-  if ((await recentResetCount(user.id)) >= 3) {
-    redirect("/forgot-password?sent=1");
+  const token =
+    isReal && !overLimit
+      ? await issueResetToken(user!.id)
+      : // Never stored, never valid. It exists so the demo page below has the
+        // same shape to render for an address that has no account.
+        crypto.randomBytes(24).toString("base64url");
+
+  if (showsDemoCode()) {
+    // Written on every submission, which is what makes the nonce unnecessary:
+    // the cookie always belongs to the request that just happened, so there is
+    // no stale code from an earlier address left to display.
+    await stashValue(RESET_CODE_COOKIE, token);
   }
 
-  const token = await issueResetToken(user.id);
-
-  /**
-   * No mail provider in this demo, so the code is surfaced once — but through a
-   * short httpOnly cookie rather than the URL. A reset code grants an account,
-   * and a query string is a permanent record of a fifteen-minute secret.
-   *
-   * In production the code only ever reaches the person by email; the query
-   * parameter the reset page still accepts is what such a link would carry.
-   */
-  const nonce = await stashOnce(RESET_CODE_COOKIE, token);
-  redirect(`/forgot-password?sent=${encodeURIComponent(nonce)}`);
+  await padTo(started, RESET_FLOOR_MS);
+  redirect("/forgot-password?sent=1");
 }
+
+/**
+ * Wait until the request has taken at least `floor` milliseconds.
+ *
+ * The work genuinely differs — a real address writes a token and counts recent
+ * ones, an unknown address cannot — so the durations are levelled rather than
+ * matched. This does not make the endpoint constant-time in the cryptographic
+ * sense, and on a cold serverless invocation the absolute numbers still move
+ * for reasons that have nothing to do with the address. What it removes is the
+ * steady, reproducible gap that made the difference readable.
+ */
+async function padTo(started: number, floor: number): Promise<void> {
+  const remaining = floor - (Date.now() - started);
+  if (remaining > 0) {
+    await new Promise((resolve) => setTimeout(resolve, remaining));
+  }
+}
+
 
 export async function resetPasswordAction(form: FormData): Promise<void> {
   const token = String(form.get("token") ?? "").trim();

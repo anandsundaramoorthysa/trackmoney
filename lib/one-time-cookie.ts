@@ -27,16 +27,26 @@ import { cookies, headers } from "next/headers";
 
 const TTL_SECONDS = 120;
 
+/**
+ * Secure unless the host is demonstrably local.
+ *
+ * Deciding this from `x-forwarded-proto` trusts a header to set a security
+ * flag, and a forged `http` would strip Secure from a cookie travelling over
+ * real TLS. Asking about the host instead means a spoof can only fail in the
+ * safe direction.
+ */
+async function secureCookies(): Promise<boolean> {
+  const host = ((await headers()).get("host") ?? "").split(":")[0].toLowerCase();
+  return !["localhost", "127.0.0.1", "[::1]", "::1"].includes(host);
+}
+
 export async function stashOnce(name: string, value: string): Promise<string> {
   const nonce = crypto.randomBytes(9).toString("base64url");
   const jar = await cookies();
   jar.set(name, JSON.stringify({ n: nonce, v: value }), {
     httpOnly: true,
     sameSite: "lax",
-    secure:
-      ((await headers()).get("x-forwarded-proto") ?? "http")
-        .split(",")[0]
-        .trim() === "https",
+    secure: await secureCookies(),
     path: "/",
     maxAge: TTL_SECONDS,
   });
@@ -57,6 +67,44 @@ export async function readOnce(
   try {
     const parsed = JSON.parse(raw) as { n?: string; v?: string };
     return parsed.n === nonce ? (parsed.v ?? null) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The same cookie, without the nonce handshake.
+ *
+ * The nonce existed to stop a page displaying a value the *previous* request
+ * had stashed — asking to reset an unknown address once showed the live code
+ * issued a minute earlier for a different one. It worked, and it cost something
+ * worse: the nonce had to travel in the URL, so a registered address redirected
+ * to `?sent=<handle>` while an unregistered one redirected to `?sent=1`. The
+ * fix for a leak had become a louder leak, because now the address bar itself
+ * said whether an account existed.
+ *
+ * Overwriting the cookie on *every* submission closes the staleness gap without
+ * a handle: whatever is in there always belongs to the most recent request, so
+ * there is nothing stale to show. The URL goes back to being the same for
+ * everyone.
+ */
+export async function stashValue(name: string, value: string): Promise<void> {
+  const jar = await cookies();
+  jar.set(name, JSON.stringify({ v: value }), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: await secureCookies(),
+    path: "/",
+    maxAge: TTL_SECONDS,
+  });
+}
+
+export async function peekValue(name: string): Promise<string | null> {
+  const raw = (await cookies()).get(name)?.value;
+  if (!raw) return null;
+
+  try {
+    return (JSON.parse(raw) as { v?: string }).v ?? null;
   } catch {
     return null;
   }

@@ -56,6 +56,11 @@ export default defineConfig({
         // assertions are about our behaviour, not about model phrasing.
         GROQ_API_KEY: "",
         GEMINI_API_KEY: "",
+        // The reset flow has no mail provider, so the code is printed on the
+        // page for the tests to read. It is printed for every address, real or
+        // not, so the affordance cannot become an oracle — and it is off unless
+        // switched on, which production never does.
+        SHOW_DEMO_RESET_CODE: "true",
       },
     },
   ],

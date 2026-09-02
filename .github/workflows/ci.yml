@@ -1,0 +1,59 @@
+name: CI
+
+# Runs the checks that do not need credentials, plus the one that does the most
+# good for the least setup: a scan of the built bundle for secret values.
+#
+# The suites that need a database and a Razorpay stand-in are not here. They are
+# run locally, and pretending otherwise by adding a job that silently skips
+# would be worse than leaving them out and saying so.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Types
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test:facts
+
+      - name: Build
+        run: npm run build
+        env:
+          # The build only needs these to exist. Nothing here is real, and
+          # nothing here is a credential — the app resolves its database on
+          # first use, not at build time.
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
+          RAZORPAY_KEY_ID: rzp_test_ci_placeholder
+          RAZORPAY_KEY_SECRET: ci_placeholder_secret_value
+
+      - name: No secrets in the client bundle
+        # The scan needs the real values to search for, so it reads them from
+        # the environment. On a fork's pull request the secrets are unavailable
+        # and the scan says which it skipped rather than reporting a clean run
+        # it did not earn.
+        run: npm run scan:bundle
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RAZORPAY_KEY_SECRET: ${{ secrets.RAZORPAY_KEY_SECRET }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MERCHANT_SIGNING_KEY: ${{ secrets.MERCHANT_SIGNING_KEY }}

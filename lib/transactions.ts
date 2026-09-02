@@ -111,6 +111,45 @@ export async function monthsWithActivity(userId: string): Promise<{
   };
 }
 
+/**
+ * Why a row cannot be written, decided in one place.
+ *
+ * The preview and the commit used to answer this separately: the preview
+ * checked for duplicates, and the commit — through `addTransaction` — also
+ * refused future dates and impossible ones. So a statement dated next week
+ * previewed as importable, ticked and ready, and then came back "2 could not be
+ * read". The rows were perfectly readable. They were refused on policy, and the
+ * commit had no vocabulary for saying so.
+ *
+ * Both paths call this now, so the preview cannot offer a row the commit will
+ * turn away.
+ */
+export type RowRefusal = "future" | "invalid_date" | "invalid_amount" | "no_merchant";
+
+export function refusalFor(row: {
+  merchant: string;
+  amountPaise: number;
+  occurredOn: string;
+}): RowRefusal | null {
+  if (!row.merchant.trim()) return "no_merchant";
+  if (!Number.isInteger(row.amountPaise) || row.amountPaise <= 0) {
+    return "invalid_amount";
+  }
+  if (row.amountPaise > MAX_AMOUNT_PAISE) return "invalid_amount";
+  if (!isRealDate(row.occurredOn)) return "invalid_date";
+  if (row.occurredOn > istToday()) return "future";
+
+  return null;
+}
+
+/** How to say each of those to somebody reading a preview. */
+export const ROW_REFUSAL_LABELS: Record<RowRefusal, string> = {
+  future: "dated in the future",
+  invalid_date: "not a real date",
+  invalid_amount: "amount cannot be read",
+  no_merchant: "no merchant name",
+};
+
 export async function addTransaction(
   user: User,
   input: {

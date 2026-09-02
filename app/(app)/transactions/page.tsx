@@ -26,6 +26,7 @@ export default async function TransactionsPage({
     capped?: string;
     imported?: string;
     skipped?: string;
+    why?: string;
     failed?: string;
     month?: string;
   }>;
@@ -33,7 +34,8 @@ export default async function TransactionsPage({
   const user = await requireUser();
   const facts = await computeUsageFacts(user);
   const params = await searchParams;
-  const { error, added, deleted, capped, imported, skipped, failed } = params;
+  const { error, added, deleted, capped, imported, skipped, failed, why } =
+    params;
 
   /**
    * Which month is on screen.
@@ -146,7 +148,15 @@ export default async function TransactionsPage({
       {imported !== undefined && (
         <p className="rounded-lg border border-line bg-brand-tint px-4 py-3 text-sm">
           {imported} imported
-          {Number(skipped ?? 0) > 0 && `, ${skipped} skipped as duplicates`}
+          {/*
+            Skipped and failed are different things, and saying so is the
+            point. A row dated next week is refused on policy — it reads
+            perfectly well — and reporting it as unreadable blamed the file
+            for a rule this app was enforcing. "Could not be read" now means
+            unparseable and nothing else.
+          */}
+          {Number(skipped ?? 0) > 0 &&
+            (why ? `, ${skipped} skipped (${why})` : `, ${skipped} skipped`)}
           {Number(failed ?? 0) > 0 && `, ${failed} could not be read`}.
         </p>
       )}

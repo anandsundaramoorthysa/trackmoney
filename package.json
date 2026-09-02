@@ -19,7 +19,8 @@
     "test:e2e": "playwright test",
     "check:providers": "tsx scripts/check-providers.ts",
     "buyer-agent": "tsx scripts/buyer-agent.ts",
-    "env:value": "tsx scripts/env-value.ts"
+    "env:value": "tsx scripts/env-value.ts",
+    "scan:bundle": "tsx scripts/scan-bundle.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

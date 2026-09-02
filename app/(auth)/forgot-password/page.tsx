@@ -4,7 +4,7 @@ import { Field, FormMessage, SubmitButton } from "@/components/auth/Field";
 import { requestResetAction } from "@/lib/auth/actions";
 import { requireGuest } from "@/lib/auth/guard";
 import { RESET_TTL_MINUTES } from "@/lib/auth/reset";
-import { RESET_CODE_COOKIE, readOnce } from "@/lib/one-time-cookie";
+import { RESET_CODE_COOKIE, peekValue } from "@/lib/one-time-cookie";
 
 export const dynamic = "force-dynamic";
 
@@ -17,12 +17,20 @@ export default async function ForgotPasswordPage({
   const { error, sent } = await searchParams;
 
   /**
-   * `sent` is a nonce, not a flag. The code itself is in a short httpOnly
-   * cookie, and only a request carrying the matching nonce can read it — so an
-   * address that was issued nothing sees nothing, even if the browser is still
-   * holding someone else's code from a minute ago.
+   * `sent` is a flag again, and deliberately carries nothing.
+   *
+   * It used to be a per-account handle, which meant the address bar announced
+   * whether an account existed — a worse leak than the staleness the handle was
+   * introduced to fix. The code lives in a short httpOnly cookie that every
+   * submission overwrites, so what is in there always belongs to the request
+   * that just happened and there is nothing stale left to show.
+   *
+   * The cookie is only ever written when the demo affordance is switched on,
+   * and when it is, it is written for every address — real for an account that
+   * exists, a decoy for one that does not. So this block appears either always
+   * or never, and never varies with the address.
    */
-  const code = await readOnce(RESET_CODE_COOKIE, sent);
+  const code = await peekValue(RESET_CODE_COOKIE);
 
   if (sent) {
     return (
@@ -42,11 +50,13 @@ export default async function ForgotPasswordPage({
         {code && (
           <div className="mb-5 rounded-lg border border-agent/40 bg-agent-tint p-3">
             <p className="text-xs text-muted">
-              Demo only — in production this is emailed, never displayed.
+              Demo only — in production this is emailed, never displayed. It is
+              shown for any address typed here, so it says nothing about whether
+              an account exists.
             </p>
             <p className="mt-1 break-all font-mono text-xs">{code}</p>
             <Link
-              href={`/reset-password?code=${encodeURIComponent(sent ?? "")}`}
+              href="/reset-password"
               className="mt-2 inline-block text-sm text-brand hover:underline"
             >
               Continue to set a new password

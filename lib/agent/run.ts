@@ -376,6 +376,32 @@ export async function runAgentTurn(input: {
     modelReply = null;
   }
 
+  /**
+   * A reply that describes Pro has to say what Pro costs.
+   *
+   * Asked what Pro includes, the model would list all five features and
+   * never mention the price — an answer that reads complete and leaves out
+   * the one number the person needs in order to decide. The deterministic
+   * template has always named it; only the generated wording could drop it.
+   *
+   * So the price is treated as part of what makes a description of Pro
+   * honest, and a reply that sells without pricing falls back to the
+   * template rather than being repaired. Same rule as everywhere else here:
+   * the model chooses the words, not which facts survive.
+   */
+  const price = formatPaise(facts.proPricePaise);
+  const mustQuotePrice =
+    user.plan === "free" && conversation.state !== "declined";
+
+  if (
+    mustQuotePrice &&
+    modelReply &&
+    /\bpro\b/i.test(modelReply) &&
+    !modelReply.includes(price)
+  ) {
+    modelReply = null;
+  }
+
   const grounded = groundOrFallback(modelReply, deterministicReply, facts);
 
   /**

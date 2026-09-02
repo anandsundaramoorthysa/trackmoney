@@ -12,7 +12,11 @@ import { transactionDedupKey } from "@/lib/dedup";
 import { categoryFor } from "@/lib/categorize";
 import { listRules } from "@/lib/category-rules";
 import { decodeRow, encodeRow, MAX_IMPORT_ROWS, type PreviewRow } from "@/lib/import-encode";
-import { addTransaction } from "@/lib/transactions";
+import {
+  addTransaction,
+  refusalFor,
+  ROW_REFUSAL_LABELS,
+} from "@/lib/transactions";
 
 /**
  * Statement import
@@ -82,6 +86,10 @@ export async function previewImportAction(form: FormData): Promise<void> {
     const duplicate = known.has(key) || seen.has(key);
     seen.add(key);
 
+    // The same rule the commit will apply, asked here so the two agree. A row
+    // the commit would refuse must never be offered ticked.
+    const refusal = refusalFor(row);
+
     // A category named by the file is the person's own data and outranks a
     // rule; rules exist to fill the silence, not to overrule a statement.
     const matched = row.category === "Other" ? categoryFor(rules, row.merchant) : null;
@@ -91,6 +99,7 @@ export async function previewImportAction(form: FormData): Promise<void> {
       category: matched?.category ?? row.category,
       matchedPattern: matched?.rule.pattern ?? null,
       duplicate,
+      refusal,
     };
   });
 
@@ -151,13 +160,33 @@ export async function commitImportAction(form: FormData): Promise<void> {
   let imported = 0;
   let skipped = 0;
   let failedRows = 0;
+  /** Skipped rows, counted by why — "skipped" alone tells nobody anything. */
+  const reasons = new Map<string, number>();
+
+  const note = (reason: string) => {
+    skipped += 1;
+    reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
+  };
 
   for (const [index, row] of batch.rows.entries()) {
     if (!chosen.has(index)) continue;
 
+    /**
+     * Three outcomes, not two.
+     *
+     * A row refused on policy is not a row that could not be read, and calling
+     * it one blamed the file for a rule the app was enforcing. "Could not be
+     * read" now means exactly one thing: unparseable.
+     */
+    const refusal = refusalFor(row);
+    if (refusal) {
+      note(ROW_REFUSAL_LABELS[refusal]);
+      continue;
+    }
+
     const result = await addTransaction(user, { ...row, source: "import" });
     if (result.ok) imported += 1;
-    else if (result.reason === "duplicate") skipped += 1;
+    else if (result.reason === "duplicate") note("already recorded");
     else failedRows += 1;
   }
 
@@ -167,7 +196,14 @@ export async function commitImportAction(form: FormData): Promise<void> {
   revalidatePath("/");
   revalidatePath("/insights");
 
+  // The reasons travel with the counts, so the page can name them rather than
+  // reporting a bare number nobody can act on.
+  const why = [...reasons.entries()]
+    .map(([reason, count]) => `${count} ${reason}`)
+    .join(", ");
+
   redirect(
-    `/transactions?imported=${imported}&skipped=${skipped}&failed=${failedRows}`,
+    `/transactions?imported=${imported}&skipped=${skipped}&failed=${failedRows}` +
+      (why ? `&why=${encodeURIComponent(why)}` : ""),
   );
 }
