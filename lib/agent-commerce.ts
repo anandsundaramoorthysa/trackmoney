@@ -23,22 +23,39 @@ import { sign, type SignedAssertion } from "@/lib/signing";
  * status codes, an MCP caller gets tool content, and neither decides anything.
  */
 
-export type PurchaseRefusal =
-  | "no_product"
-  | "above_buyer_limit"
-  | "challenge_unknown"
-  | "challenge_used"
-  | "challenge_expired"
-  | "challenge_wrong_product"
-  | "mandate_unknown"
-  | "mandate_used"
-  | "mandate_expired"
-  | "mandate_wrong_product"
-  | "mandate_amount_exceeds"
-  | "mandate_race"
-  | "no_account"
-  | "already_pro"
-  | "razorpay_error";
+/**
+ * Every way a purchase can be refused, as one list.
+ *
+ * This is a value rather than a bare type because the catalogue publishes it,
+ * and a published vocabulary that drifts from the code is worse than an
+ * unpublished one: a buyer branching on `refusedBecause` would be branching on
+ * strings we had quietly stopped sending. Exporting the array means the
+ * documentation is generated from the same source the refusals come from, and
+ * a test asserts the two still agree.
+ *
+ * The names are namespaced on purpose. "unknown" alone never said unknown
+ * what — a challenge and a mandate can both be unrecognised, for entirely
+ * different reasons and with different fixes.
+ */
+export const PURCHASE_REFUSALS = [
+  "no_product",
+  "above_buyer_limit",
+  "challenge_unknown",
+  "challenge_used",
+  "challenge_expired",
+  "challenge_wrong_product",
+  "mandate_unknown",
+  "mandate_used",
+  "mandate_expired",
+  "mandate_wrong_product",
+  "mandate_amount_exceeds",
+  "mandate_race",
+  "no_account",
+  "already_pro",
+  "razorpay_error",
+] as const;
+
+export type PurchaseRefusal = (typeof PURCHASE_REFUSALS)[number];
 
 /**
  * What this merchant asserts about one purchase.

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { PURCHASE_REFUSALS } from "@/lib/agent-commerce";
 import { handleRouteError } from "@/lib/api-errors";
 import { db } from "@/lib/db";
 import { planConfig } from "@/lib/db/schema";
@@ -85,6 +86,35 @@ async function handleGET() {
         requestBody: { productId: "string", maxAmountMinor: "integer" },
         settlement:
           "The response carries a Razorpay order id. A person authorises it in Razorpay's own checkout; this endpoint never captures payment and cannot.",
+        /**
+         * The shape of an answer, stated rather than left to be discovered.
+         *
+         * This was documented nowhere, which is why a rewrite could flatten
+         * `settlement` from an object to a string without anything noticing.
+         * A machine-readable merchant that will not say what it returns is
+         * asking every buyer to find out by trying.
+         */
+        responses: {
+          success: {
+            orderId: "string, the Razorpay order id",
+            amountMinor: "integer, paise",
+            currency: "string",
+            keyId: "string, the Razorpay key id for checkout",
+            reused: "boolean, true when an open order was returned rather than a new one",
+            cart: "object: { payload, signature? } — the merchant's signed assertion of these terms",
+            settlement: {
+              status: "awaiting_human_authorisation",
+              note: "string",
+              checkoutKeyId: "string",
+            },
+            auditTrail: "string, a path where this purchase can be read back",
+          },
+          refusal: {
+            error: "string, in plain words",
+            refusedBecause: PURCHASE_REFUSALS,
+            priceMinor: "integer, present only when the refusal was about price",
+          },
+        },
         gates: [
           "A valid, unspent, unexpired mandate naming this product",
           "The catalogue price must not exceed the mandate's cap",

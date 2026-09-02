@@ -18,7 +18,8 @@
     "test": "npm run test:facts && npm run test:integration && npm run test:e2e",
     "test:e2e": "playwright test",
     "check:providers": "tsx scripts/check-providers.ts",
-    "buyer-agent": "tsx scripts/buyer-agent.ts"
+    "buyer-agent": "tsx scripts/buyer-agent.ts",
+    "env:value": "tsx scripts/env-value.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

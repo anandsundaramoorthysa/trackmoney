@@ -60,6 +60,42 @@ Then in the browser:
 - Run `npm run check:providers` on the day. Hosted model catalogues change
   without notice, and that failure is silent.
 
+## Setting the environment variables
+
+Add all of them **before** the first deploy, or the build fails while collecting
+page data.
+
+| Variable | |
+|---|---|
+| `DATABASE_URL` | Neon connection string |
+| `RAZORPAY_KEY_ID` | Must start with `rzp_test_` |
+| `RAZORPAY_KEY_SECRET` | |
+| `GROQ_API_KEY` | Optional; the agent falls back without it |
+| `GEMINI_API_KEY` | Optional; the second fallback |
+| `MERCHANT_SIGNING_KEY` | Optional; signs cart mandates when present |
+
+If you script this rather than pasting into the dashboard, read the values with
+the helper rather than through `dotenv`:
+
+```bash
+npm run env:value DATABASE_URL > value.txt
+npx vercel env add DATABASE_URL production < value.txt
+```
+
+**Why it matters.** `dotenv` prints its banner to *stdout*, not stderr, so
+piping a value through it prepends about ninety characters of banner to the
+value. That happened here: a Razorpay key id that should be twenty-three
+characters arrived as a hundred and eighteen, and every one of the five was
+wrong. Nothing failed loudly — the deployment simply could not reach anything.
+The helper parses `.env.local` directly and writes only the value, and it
+handles multi-line quoted values such as a PEM key.
+
+To check what actually landed, the deployed app is the test: `/api/catalog`
+proves the database, the assistant answering proves a model provider, and
+`/api/agent-commerce/key` reports whether signing is on. Vercel marks these
+Sensitive and will not read them back, so there is nothing to compare against
+directly.
+
 ## If the demo looks empty
 
 The seed lays its data out relative to the day it runs — this month, last
