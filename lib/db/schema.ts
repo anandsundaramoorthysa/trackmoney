@@ -257,6 +257,35 @@ export const categoryRules = pgTable(
   ],
 );
 
+/**
+ * One-shot challenges issued with a 402.
+ *
+ * x402's refusal carries a nonce so that a captured "payment required" cannot
+ * be replayed as though it were a fresh demand, and so a buyer's answer is
+ * bound to one specific demand rather than floating free.
+ *
+ * The first version of this emitted a random nonce and never stored it, which
+ * is worse than emitting nothing: the payload advertised replay resistance and
+ * provided none. Either the challenge is real or it should not be mentioned,
+ * and a table is the cheap half of making it real.
+ *
+ * Rows are short-lived by design. Nothing here is worth keeping once it has
+ * been spent or has expired, and the sweep runs whenever a new one is issued.
+ */
+export const paymentChallenges = pgTable("payment_challenges", {
+  /** The nonce itself, and the primary key: it is unique by construction. */
+  nonce: text("nonce").primaryKey(),
+  /** What was being asked for, so a challenge cannot be moved to another product. */
+  productId: text("product_id").notNull(),
+  amountPaise: integer("amount_paise").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  /** Set the moment it is accepted, which is what makes it single-use. */
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export const payments = pgTable(
   "payments",
   {

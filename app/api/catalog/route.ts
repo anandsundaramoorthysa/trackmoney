@@ -70,6 +70,8 @@ async function handleGET() {
           supported: "no",
           detail:
             "NPCI's Unified Agent Protocol is not published in enough detail to implement against. Claiming support for a specification nobody can read would be worth nothing to a buyer.",
+          note:
+            "The mandate below is shaped like UPI Reserve Pay, which is the primitive agentic payments in India are actually being built on: a one-time, consent-based authorisation that names a merchant and caps what may be spent. That resemblance is deliberate — it is the model an Indian buyer will already understand — but it is a resemblance and not an integration. Nothing here touches UPI.",
         },
       },
 

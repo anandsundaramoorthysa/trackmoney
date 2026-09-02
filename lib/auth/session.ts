@@ -35,9 +35,31 @@ function hashToken(token: string): string {
  * like a broken login rather than a transport mismatch. Behind Vercel this is
  * always https.
  */
+/**
+ * Should the session cookie be marked Secure?
+ *
+ * This read `x-forwarded-proto` and believed it. Trusting a header to decide a
+ * security flag is the header-confusion shape that the x402 analysis calls out,
+ * and the danger is one-directional: a forged `https` only makes the cookie
+ * stricter, while a forged `http` would strip Secure from a cookie travelling
+ * over a real TLS connection and let it leak on the next plain request.
+ *
+ * So the question is inverted. Secure unless the request is demonstrably local
+ * — which is the only case that actually needs it off, because a browser will
+ * not send a Secure cookie to http://localhost. A spoofed header can now only
+ * fail in the safe direction.
+ */
 async function isSecureRequest(): Promise<boolean> {
-  const forwarded = (await headers()).get("x-forwarded-proto");
-  return (forwarded ?? "http").split(",")[0].trim() === "https";
+  const host = (await headers()).get("host") ?? "";
+  const hostname = host.split(":")[0].toLowerCase();
+
+  const isLocal =
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]" ||
+    hostname === "::1";
+
+  return !isLocal;
 }
 
 export async function createSession(userId: string): Promise<void> {

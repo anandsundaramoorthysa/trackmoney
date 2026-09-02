@@ -1,6 +1,7 @@
 import type { AgentEvent } from "@/lib/db/schema";
 import type { UsageFacts } from "@/lib/facts";
 import { formatPaise } from "@/lib/money";
+import { neutraliseUserText } from "./grounding";
 import type { Intent } from "./intent";
 
 /**
@@ -49,7 +50,7 @@ function factsBlock(facts: UsageFacts): string {
   if (facts.showsRecurringDetail) {
     for (const c of facts.recurringCandidates) {
       lines.push(
-        `  - ${c.merchant}, ${formatPaise(c.amountPaise)}, seen in ${c.monthsSeen} months`,
+        `  - ${neutraliseUserText(c.merchant)}, ${formatPaise(c.amountPaise)}, seen in ${c.monthsSeen} months`,
       );
     }
   } else if (facts.recurringCount > 0) {

@@ -131,7 +131,46 @@ const CLAIMS: Claim[] = [
     expected: (f) => f.remainingOnFree,
     describes: "how many are left on Free",
   },
+  {
+    pattern: /(?:costs|price|one-time unlock of)\s*₹\s*(\d[\d,]*)/i,
+    expected: (f) => Math.round(f.proPricePaise / 100),
+    describes: "the price of Pro",
+  },
+  {
+    pattern: /₹\s*(\d[\d,]*(?:\.\d+)?)\s+(?:this month|in total)/i,
+    expected: (f) => Math.round(f.totalSpentPaise / 100),
+    describes: "what was spent this month",
+  },
+  {
+    pattern: /(\d[\d,]*)\s+(?:more )?transactions?\s+(?:before|until)/i,
+    expected: (f) => f.remainingOnFree,
+    describes: "how many transactions remain",
+  },
 ];
+
+/**
+ * Text that is trying to be an instruction rather than a merchant name.
+ *
+ * A transaction's merchant is the user's own data and it reaches the model's
+ * prompt, which is the vector the AP2 red-teaming work goes after. The tool
+ * gates make it useless for moving money — those run in code, and no wording
+ * reaches them — but an injected string can still steer what the agent *says*,
+ * and a confident false sentence is its own kind of harm.
+ *
+ * So merchant text is neutralised before it is interpolated. Not sanitised into
+ * silence: a merchant genuinely called "Ignore Cafe" should still be readable.
+ * The markers that make a line look like a new instruction are what goes.
+ */
+const INSTRUCTION_SHAPED =
+  /\b(ignore|disregard|forget)\s+(all\s+|any\s+|the\s+)?(previous|prior|above|earlier)\b|\b(system|assistant|developer)\s*:|<\/?(system|instructions?)>|\bnew\s+instructions?\b/gi;
+
+export function neutraliseUserText(value: string): string {
+  return value
+    .replace(INSTRUCTION_SHAPED, "[redacted]")
+    // Line breaks are how a payload pretends to start a fresh turn.
+    .replace(/[\r\n]+/g, " ")
+    .slice(0, 80);
+}
 
 export type ClaimResult = {
   ok: boolean;
