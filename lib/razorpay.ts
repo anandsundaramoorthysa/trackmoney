@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { isUniqueViolation } from "@/lib/db/errors";
 import { payments, planConfig, users, type User } from "@/lib/db/schema";
 import { formatPaise } from "@/lib/money";
+import { modalityOf, MODALITY_LABELS } from "@/lib/modality";
 
 /**
  * The one shared money function.
@@ -177,6 +178,9 @@ export async function createProUpgradeOrder(
         moneyMoved: false,
         orderId: existing.razorpayOrderId,
         initiatedBy: options.initiatedBy,
+        // The distinction an issuer would want: not which code ran, but
+        // whether a person was there when this was authorised.
+        modality: modalityOf(options.initiatedBy),
       },
     });
 
@@ -239,6 +243,9 @@ export async function createProUpgradeOrder(
           abandonedOrderId: order.id,
           orderId: winner?.razorpayOrderId,
           initiatedBy: options.initiatedBy,
+        // The distinction an issuer would want: not which code ran, but
+        // whether a person was there when this was authorised.
+        modality: modalityOf(options.initiatedBy),
         },
       });
 
@@ -264,7 +271,7 @@ export async function createProUpgradeOrder(
       userId: user.id,
       conversationId: options.conversationId ?? null,
       type: "checkout_created",
-      explanation: `Created a ${formatPaise(pro.pricePaise)} Razorpay test-mode order for the Pro upgrade. No money moves until the user authorises it in Razorpay's own checkout.`,
+      explanation: `Created a ${formatPaise(pro.pricePaise)} Razorpay test-mode order for the Pro upgrade, authorised with ${MODALITY_LABELS[modalityOf(options.initiatedBy)].toLowerCase()}. No money moves until the user authorises it in Razorpay's own checkout.`,
       facts: {
         pricePaise: pro.pricePaise,
         currency: RAZORPAY_CURRENCY,
@@ -272,6 +279,9 @@ export async function createProUpgradeOrder(
       meta: {
         orderId: order.id,
         initiatedBy: options.initiatedBy,
+        // The distinction an issuer would want: not which code ran, but
+        // whether a person was there when this was authorised.
+        modality: modalityOf(options.initiatedBy),
         sharedFunction: "createProUpgradeOrder",
       },
     });
@@ -299,6 +309,9 @@ export async function createProUpgradeOrder(
         // The activity page reads this to label and tally the row honestly.
         moneyMoved: false,
         initiatedBy: options.initiatedBy,
+        // The distinction an issuer would want: not which code ran, but
+        // whether a person was there when this was authorised.
+        modality: modalityOf(options.initiatedBy),
       },
     });
 

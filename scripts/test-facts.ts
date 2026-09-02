@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
-import { checkGrounding, suggestionTemplate } from "@/lib/agent/grounding";
+import { checkClaims, checkGrounding, suggestionTemplate } from "@/lib/agent/grounding";
+import { modalityOf, MODALITY_LABELS } from "@/lib/modality";
 import { classifyIntent } from "@/lib/agent/intent";
 import type { UsageFacts } from "@/lib/facts";
 import { formatPaise } from "@/lib/money";
@@ -633,6 +634,56 @@ test("a suggested pattern is a word, not the whole reference", () => {
   assert.equal(suggestion?.matchType, "word");
 
   assert.equal(suggestPattern("123 456"), null);
+});
+
+
+test("a real number used for the wrong thing is caught", () => {
+  /**
+   * The blind spot grounding always had, and admitted to. FACTS carries a 3
+   * that is not the recurring count, so "3 of your charges repeat" is made of
+   * genuine digits and still says something false.
+   */
+  const sentence = "3 of your charges repeat monthly.";
+
+  // 3 is genuinely in the facts — it is the number of Pro-only features — so
+  // the numeric check has nothing to object to. That is the blind spot.
+  assert.equal(checkGrounding(sentence, FACTS).ok, true);
+
+  // The claim check knows which fact is allowed to fill this sentence.
+  const claims = checkClaims(sentence, FACTS);
+  assert.equal(claims.ok, false, "a wrong claim made of real digits slipped through");
+  assert.match(claims.wrong[0] ?? "", /charges recur/);
+});
+
+test("the same sentence with the right number passes", () => {
+  const right = `${FACTS.recurringCount} of your charges repeat monthly.`;
+  assert.equal(checkClaims(right, FACTS).ok, true);
+});
+
+test("claims about the cap and what is left are checked in place", () => {
+  const wrongCap = checkClaims(`against a cap of ${FACTS.freeTxnCap + 1}`, FACTS);
+  assert.equal(wrongCap.ok, false);
+
+  const rightCap = checkClaims(`against a cap of ${FACTS.freeTxnCap}`, FACTS);
+  assert.equal(rightCap.ok, true);
+
+  const wrongLeft = checkClaims(`with ${FACTS.remainingOnFree + 2} left`, FACTS);
+  assert.equal(wrongLeft.ok, false);
+});
+
+test("a sentence making no claim at all is not accused of one", () => {
+  assert.equal(checkClaims("Pro removes the monthly limit.", FACTS).ok, true);
+  assert.equal(checkClaims("", FACTS).ok, true);
+});
+
+test("modality names who was present, not which code ran", () => {
+  // The distinction an issuer wants. "The assistant did it" is not an answer;
+  // "a human agreed in their own words and the agent prepared it" is.
+  assert.equal(modalityOf("billing_page"), "human_present");
+  assert.equal(modalityOf("agent"), "human_present_agent_assisted");
+  assert.equal(modalityOf("ai_buyer"), "human_not_present");
+
+  assert.equal(MODALITY_LABELS.human_not_present, "Human not present, mandate held");
 });
 
 

@@ -9,6 +9,7 @@ import {
 } from "./conversation";
 import {
   answerTemplate,
+  checkClaims,
   checkGrounding,
   declineTemplate,
   declinedAnswerTemplate,
@@ -82,16 +83,29 @@ function groundOrFallback(
   }
 
   const check = checkGrounding(candidate, facts);
-  if (check.ok) {
+
+  /**
+   * Two questions, not one.
+   *
+   * Grounding asks whether a figure came from the data. Claims ask whether it
+   * was used for the thing it describes — because a number can be genuine and
+   * still be wrong in place. "3 of your charges repeat" passes the first check
+   * whenever 3 appears anywhere in the facts, including as the number of
+   * transactions left before the cap.
+   */
+  const claims = checkClaims(candidate, facts);
+
+  if (check.ok && claims.ok) {
     return { text: candidate.trim(), grounding: "passed", offending: [] };
   }
 
-  // A number appeared that the facts do not support. Discard the whole
-  // generation rather than trying to repair it.
+  // Either a number the facts do not support, or one used to say something the
+  // facts contradict. Discard the whole generation rather than repair it, and
+  // name what was wrong so the trail says which of the two it was.
   return {
     text: fallback,
     grounding: "fell_back_to_template",
-    offending: check.offending,
+    offending: check.ok ? claims.wrong : check.offending,
   };
 }
 

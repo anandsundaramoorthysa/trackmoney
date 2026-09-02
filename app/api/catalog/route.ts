@@ -42,8 +42,41 @@ async function handleGET() {
         currency: "INR",
         features: plan.features,
       })),
+      /**
+       * What this merchant speaks, and what it does not.
+       *
+       * The agentic-payment protocols are young and none of them is settled,
+       * so claiming compliance would be the easy lie. What is true is that the
+       * ideas are borrowed deliberately and named, and that a buyer can see
+       * exactly where the borrowing stops.
+       */
+      protocols: {
+        x402: {
+          supported: "partial",
+          detail:
+            "An unauthorised purchase is answered 402 Payment Required with an `accepts` payload naming the amount, the currency, where to obtain authorisation and a nonce. Settlement is Razorpay test mode, not an onchain transfer, so the payment half of x402 does not apply.",
+        },
+        ap2: {
+          supported: "vocabulary-only",
+          detail:
+            "The three-mandate split is followed in substance: an intent the account holder authorised, a cart this merchant binds a price to, and a modality recorded on every order — human present, human present with agent assistance, or human not present. Nothing here is a W3C Verifiable Credential and nothing is signed by a wallet, so this is the shape of AP2 rather than AP2 itself.",
+        },
+        acp: {
+          supported: "partial",
+          detail:
+            "This document is the machine-readable product feed. Delegated payment tokens are not implemented: no token issued here can move money, by design.",
+        },
+        uap: {
+          supported: "no",
+          detail:
+            "NPCI's Unified Agent Protocol is not published in enough detail to implement against. Claiming support for a specification nobody can read would be worth nothing to a buyer.",
+        },
+      },
+
       purchase: {
         endpoint: "/api/agent-commerce/orders",
+        unauthorised:
+          "402 Payment Required, with an `accepts` array describing what would satisfy it.",
         method: "POST",
         authorization:
           "Bearer <purchase mandate>. A mandate is issued by the account holder, names one product, caps the amount, expires, and is spent by a single order.",

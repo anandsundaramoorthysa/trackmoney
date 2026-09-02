@@ -82,6 +82,81 @@ export function checkGrounding(
   return { ok: offending.length === 0, offending };
 }
 
+/**
+ * Claims: the number is right, and it is being used for the right thing.
+ *
+ * `checkGrounding` answers "did this figure come from the data", which is a
+ * real question and not the only one. Its stated blind spot was that a figure
+ * can be genuine and still be wrong in place: 3 sits in the facts as
+ * "transactions left before the cap", so a sentence claiming three charges
+ * recur passes cleanly while saying something false.
+ *
+ * This closes that for the claims the agent actually makes. Each pattern binds
+ * a phrasing to the one fact that is allowed to fill it, so a number in the
+ * wrong role is caught even though it appears somewhere in the data.
+ *
+ * It is deliberately a small list. A general "is this sentence true" checker is
+ * not a thing anyone can write, and pretending otherwise would be worse than
+ * the narrow check this replaces — so the patterns cover the claims the
+ * templates and the prompt actually produce, and everything else still falls
+ * through to the numeric check.
+ */
+type Claim = {
+  /** Captures the figure in group 1. */
+  pattern: RegExp;
+  /** What that figure is allowed to be. */
+  expected: (facts: UsageFacts) => number;
+  /** Named in the audit trail when it does not match. */
+  describes: string;
+};
+
+const CLAIMS: Claim[] = [
+  {
+    pattern: /(\d[\d,]*)\s+of\s+your\s+charges\s+repeat/i,
+    expected: (f) => f.recurringCount,
+    describes: "how many charges recur",
+  },
+  {
+    pattern: /(\d[\d,]*)\s+transactions?\s+in\b/i,
+    expected: (f) => f.txnCountThisMonth,
+    describes: "how many transactions this month",
+  },
+  {
+    pattern: /cap\s+of\s+(\d[\d,]*)/i,
+    expected: (f) => f.freeTxnCap,
+    describes: "the Free cap",
+  },
+  {
+    pattern: /with\s+(\d[\d,]*)\s+left/i,
+    expected: (f) => f.remainingOnFree,
+    describes: "how many are left on Free",
+  },
+];
+
+export type ClaimResult = {
+  ok: boolean;
+  /** One sentence per wrong claim, for the audit trail. */
+  wrong: string[];
+};
+
+export function checkClaims(text: string, facts: UsageFacts): ClaimResult {
+  const wrong: string[] = [];
+
+  for (const claim of CLAIMS) {
+    const found = text.match(claim.pattern);
+    if (!found) continue;
+
+    const said = Number(found[1].replace(/,/g, ""));
+    const truth = claim.expected(facts);
+
+    if (Number.isFinite(said) && said !== truth) {
+      wrong.push(`said ${said} for ${claim.describes}, which is ${truth}`);
+    }
+  }
+
+  return { ok: wrong.length === 0, wrong };
+}
+
 /* ------------------------------------------------------------------ */
 /* Deterministic templates — the floor the agent can never fall below. */
 /* ------------------------------------------------------------------ */

@@ -8,6 +8,7 @@ import { planConfig, users } from "@/lib/db/schema";
 import { checkMandate, consumeMandate, releaseMandate } from "@/lib/mandates";
 import { formatPaise } from "@/lib/money";
 import { createProUpgradeOrder } from "@/lib/razorpay";
+import crypto from "node:crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +25,17 @@ export const dynamic = "force-dynamic";
  * the order in Razorpay's checkout. An AI buyer can commit its principal to an
  * order; it cannot move their money.
  */
+/** The Pro row, so the 402 quotes what the catalogue quotes. */
+async function proProduct() {
+  const [pro] = await db
+    .select({ pricePaise: planConfig.pricePaise })
+    .from(planConfig)
+    .where(eq(planConfig.plan, "pro"))
+    .limit(1);
+
+  return pro ?? null;
+}
+
 async function handlePOST(request: Request) {
   const header = request.headers.get("authorization") ?? "";
   const token = header.toLowerCase().startsWith("bearer ")
@@ -31,12 +43,48 @@ async function handlePOST(request: Request) {
     : "";
 
   if (!token) {
+    /**
+     * 402, not 401, and a payload that says what would satisfy it.
+     *
+     * 401 tells a buyer it is unauthenticated, which is not the situation: it
+     * is unpaid. x402 revived HTTP's long-unused 402 for exactly this, and the
+     * useful half is the body — an agent that meets a wall should be told the
+     * amount, the currency, where to obtain authorisation and how long an
+     * answer stays good for, rather than having to have read our documentation
+     * first.
+     *
+     * The nonce is there for the same reason x402 carries one: so a captured
+     * response cannot be replayed as though it were a fresh demand.
+     */
+    const pro = await proProduct();
+
     return NextResponse.json(
       {
-        error:
-          "A purchase mandate is required. See /api/catalog for how to obtain one.",
+        error: "Payment authorisation required.",
+        accepts: [
+          {
+            scheme: "trackmoney-mandate",
+            protocol: "x402-style",
+            amountMinor: pro?.pricePaise ?? null,
+            currency: "INR",
+            minorUnit: "paise",
+            resource: "/api/agent-commerce/orders",
+            authorisationEndpoint: "/billing",
+            description:
+              "A purchase mandate, issued by the account holder, presented as a bearer token.",
+            expiresInSeconds: 1800,
+            nonce: crypto.randomUUID(),
+          },
+        ],
+        documentation: "/api/catalog",
       },
-      { status: 401 },
+      {
+        status: 402,
+        headers: {
+          // Named so a buyer can branch on the scheme without parsing the body.
+          "WWW-Authenticate": 'Bearer realm="trackmoney", scheme="trackmoney-mandate"',
+        },
+      },
     );
   }
 
