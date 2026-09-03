@@ -27,7 +27,7 @@ playwright-report/
 
 # Kept on disk, deliberately out of the public repo: the internal planning
 # notes and the test suite. Both stay in the working tree, so the suites still
-# run locally. README.md and docs/ are public and stay tracked.
+# run locally.
 PLAN.md
 tests/
 # Meaningless without tests/, so it travels with them.
@@ -45,7 +45,8 @@ coverage/
 .vercel
 .env*
 
-# Kept locally, not published. The pitch and the internal guides are written for
-# one audience and one week; the README is what a stranger arrives at.
+# Also local-only. The pitch and the internal guides were written for one
+# audience in one week; a stranger should arrive at README.md and
+# ARCHITECTURE.md, which are the two documents that are published.
 PITCH.md
 docs/
