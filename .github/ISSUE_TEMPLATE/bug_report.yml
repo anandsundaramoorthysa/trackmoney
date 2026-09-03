@@ -1,0 +1,64 @@
+name: Bug report
+description: Something behaves differently from what it says it does
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Before you start — a few things here look like
+        bugs and are deliberate; they are listed under "Things that are
+        deliberate and look like bugs" in
+        [CONTRIBUTING.md](https://github.com/anandsundaramoorthysa/trackmoney/blob/main/CONTRIBUTING.md).
+
+        **Found a security problem?** Do not file it here — see
+        [SECURITY.md](https://github.com/anandsundaramoorthysa/trackmoney/blob/main/SECURITY.md) for the private route.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+      placeholder: |
+        I clicked X and the page said Y. I expected it to say Z.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: >
+        The shortest path you know of. If it only happens sometimes, say so —
+        that is useful information, not a reason to withhold the report.
+      placeholder: |
+        1. Sign in as the demo account
+        2. Go to /transactions
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: The deployed demo, or running it locally?
+      placeholder: "the live demo / local, commit abc1234"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Browser and screen size
+      description: >
+        Only if it is a display or layout problem. Width in pixels helps more
+        than a device name.
+      placeholder: "Chrome 141 on Android, 375px wide"
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: >
+        Screenshots, console errors, the request that failed. Please redact
+        session cookies and anything from `.env.local`.

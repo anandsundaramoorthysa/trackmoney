@@ -44,3 +44,8 @@ coverage/
 
 .vercel
 .env*
+
+# Kept locally, not published. The pitch and the internal guides are written for
+# one audience and one week; the README is what a stranger arrives at.
+PITCH.md
+docs/

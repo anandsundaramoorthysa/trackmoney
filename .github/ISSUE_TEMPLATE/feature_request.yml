@@ -1,0 +1,46 @@
+name: Idea or change
+description: Suggest something that does not exist yet, or argue that something should work differently
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Arguments that a decision here is wrong are as welcome as feature
+        requests — several of the choices in this project are documented with
+        their reasoning precisely so they can be challenged.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is the problem
+      description: >
+        Describe the situation rather than the solution. What were you trying
+        to do, and what got in the way?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would do about it
+      description: If you have something specific in mind. It is fine not to.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What else you considered
+      description: >
+        Including doing nothing. If the current behaviour is defensible and you
+        just prefer another, say that — it is a legitimate position and easier
+        to discuss when it is stated.
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      description: >
+        This is a demonstration of agentic commerce done carefully, not a
+        general-purpose expense tracker. Not every good idea belongs in it.
+      options:
+        - label: I have read the "Scope, stated honestly" section of the README
+          required: false
