@@ -168,9 +168,14 @@ export default async function BillingPage({
                       <td className="px-4 py-2">
                         <StatusPill status={row.status} />
                         {row.failureReason && (
-                          <span className="ml-2 text-xs text-muted">
-                            {row.failureReason}
-                          </span>
+                          <>
+                            {/* A real space, not just a margin: without it the
+                                row reads "failedPayment failed" to a screen
+                                reader and to anyone copying the table out. */}{" "}
+                            <span className="ml-1 text-xs text-muted">
+                              {row.failureReason}
+                            </span>
+                          </>
                         )}
                       </td>
                       <td className="px-4 py-2 text-right font-mono tabular">
@@ -185,9 +190,12 @@ export default async function BillingPage({
         </section>
 
         <p className="text-xs text-muted">
-          Test-mode card: <code className="font-mono">5267 3181 8797 5449</code>{" "}
-          succeeds. Enter any wrong OTP to see a payment fail.
-          Any future expiry and any CVV.
+          Test-mode card: <code className="font-mono">5267 3181 8797 5449</code>,
+          any future expiry, any CVV, OTP <code className="font-mono">1234</code>.
+          To see a payment fail, choose{" "}
+          <span className="font-medium">Pay on bank&rsquo;s page</span> at the OTP
+          step and then <span className="font-medium">Failure</span> — a wrong OTP
+          does not fail the payment, it just asks again.
         </p>
       </div>
     );

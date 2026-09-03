@@ -56,6 +56,19 @@ async function handlePOST(request: Request) {
      */
     const terms = await purchaseTerms(productId);
 
+    // No such product: a missing resource, not an unpaid one. Answering 402
+    // here would send a buyer off to get authorised for a price we never quoted.
+    if (!terms) {
+      return NextResponse.json(
+        {
+          error: `No purchasable product with id "${productId}".`,
+          refusedBecause: "product_unknown",
+          documentation: "/api/catalog",
+        },
+        { status: 404 },
+      );
+    }
+
     return NextResponse.json(
       {
         error: "Payment authorisation required.",

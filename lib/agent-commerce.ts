@@ -96,7 +96,15 @@ export type PurchaseResult =
     }
   | { ok: false; refusedBecause: PurchaseRefusal; message: string; priceMinor?: number };
 
-/** The terms a buyer is told when it arrives with nothing. */
+/**
+ * The terms a buyer is told when it arrives with nothing, or null if there is
+ * no such product.
+ *
+ * Quoting terms for something that cannot be bought is worse than saying no:
+ * an unknown id used to come back 402 with `amountMinor: null`, which tells a
+ * buying agent to go and get authorised for a price that does not exist. A
+ * missing product is a missing resource, and the honest answer is 404.
+ */
 export async function purchaseTerms(productId = "pro") {
   const [product] = await db
     .select()
@@ -104,16 +112,18 @@ export async function purchaseTerms(productId = "pro") {
     .where(eq(planConfig.plan, productId as "free" | "pro"))
     .limit(1);
 
+  if (!product) return null;
+
   const challenge = await issueChallenge({
     productId,
-    amountPaise: product?.pricePaise ?? 0,
+    amountPaise: product.pricePaise,
   });
 
   return {
     scheme: "trackmoney-mandate",
     protocol: "x402-style",
     productId,
-    amountMinor: product?.pricePaise ?? null,
+    amountMinor: product.pricePaise,
     currency: "INR",
     minorUnit: "paise",
     resource: "/api/agent-commerce/orders",

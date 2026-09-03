@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { monthQuota, planConfig, transactions, type User } from "@/lib/db/schema";
 import { isUniqueViolation } from "@/lib/db/errors";
 import { transactionDedupKey } from "@/lib/dedup";
+import { isUuid } from "@/lib/ids";
 import { isRealDate, istMonthRange, istToday } from "@/lib/time";
 import { CATEGORIES } from "@/lib/categories";
 
@@ -351,6 +352,10 @@ export async function deleteTransaction(
   user: User,
   id: string,
 ): Promise<boolean> {
+  // A malformed id matches nothing, so answer that directly rather than letting
+  // Postgres raise on the uuid cast and turn a bad id into a 500.
+  if (!isUuid(id)) return false;
+
   const removed = await db
     .delete(transactions)
     .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)))

@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { handleRouteError } from "@/lib/api-errors";
@@ -104,6 +105,13 @@ async function handlePOST(request: Request) {
       .set({ state: "converted" })
       .where(eq(conversations.id, attributedConversationId));
   }
+
+  // The plan badge, the cap and the payment row all change on this. Leaving
+  // them cached showed a settled order as still "created" until a hand reload.
+  revalidatePath("/billing");
+  revalidatePath("/agent-activity");
+  revalidatePath("/transactions");
+  revalidatePath("/");
 
   return NextResponse.json({
     verified: true,

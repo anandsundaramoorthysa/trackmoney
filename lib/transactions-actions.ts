@@ -19,12 +19,29 @@ function back(params: Record<string, string>): never {
   redirect(`/transactions${query ? `?${query}` : ""}`);
 }
 
+/**
+ * Send the outcome back to the month the form was submitted from.
+ *
+ * Both forms carry the month on screen as a hidden field. Without it, deleting
+ * a row while looking at August answered on September — the row did vanish, but
+ * from a list the user was no longer being shown, which reads as the delete
+ * having hit the wrong thing. The month is validated on the way back in, so a
+ * hand-edited field cannot put anything but a month into the URL.
+ */
+function backToMonth(month: string, params: Record<string, string>): never {
+  const withMonth = /^\d{4}-\d{2}$/.test(month)
+    ? { ...params, month }
+    : params;
+  back(withMonth);
+}
+
 export async function addTransactionAction(form: FormData): Promise<void> {
   const user = await requireUser();
+  const month = String(form.get("month") ?? "");
 
   const amountPaise = rupeesToPaise(String(form.get("amount") ?? ""));
   if (amountPaise === null) {
-    back({ error: "Enter an amount like 249 or 249.50." });
+    backToMonth(month, { error: "Enter an amount like 249 or 249.50." });
   }
 
   const result = await addTransaction(user, {
@@ -37,24 +54,30 @@ export async function addTransactionAction(form: FormData): Promise<void> {
   if (result.ok) {
     revalidatePath("/transactions");
     revalidatePath("/");
-    back({ added: "1" });
+    backToMonth(month, { added: "1" });
   }
 
   if (result.reason === "cap_reached") {
-    back({ capped: String(result.cap) });
+    backToMonth(month, { capped: String(result.cap) });
   }
   if (result.reason === "duplicate") {
-    back({ error: "You already have that exact transaction on that date." });
+    backToMonth(month, {
+      error: "You already have that exact transaction on that date.",
+    });
   }
-  back({ error: result.message });
+  backToMonth(month, { error: result.message });
 }
 
 export async function deleteTransactionAction(form: FormData): Promise<void> {
   const user = await requireUser();
   const id = String(form.get("id") ?? "");
+  const month = String(form.get("month") ?? "");
 
   const removed = await deleteTransaction(user, id);
   revalidatePath("/transactions");
   revalidatePath("/");
-  back(removed ? { deleted: "1" } : { error: "That transaction no longer exists." });
+  backToMonth(
+    month,
+    removed ? { deleted: "1" } : { error: "That transaction no longer exists." },
+  );
 }

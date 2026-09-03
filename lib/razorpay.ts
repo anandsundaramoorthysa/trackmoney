@@ -517,6 +517,20 @@ export async function markPaymentFailed(input: {
     return;
   }
 
+  /**
+   * The same failure, reported twice, is one failure.
+   *
+   * `payment.failed` fires per attempt and the browser does not await the POST,
+   * so a single refusal can arrive more than once. Each arrival used to write
+   * its own trail entry: one order and one decline showed up as two money
+   * actions, which makes the count on the activity page wrong in the direction
+   * that matters. A repeat carrying the same reason is a redelivery and has
+   * nothing to add.
+   */
+  if (existing?.status === "failed" && existing.failureReason === input.reason.slice(0, 500)) {
+    return;
+  }
+
   const updated = await db
     .update(payments)
     .set({

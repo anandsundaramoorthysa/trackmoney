@@ -6,6 +6,7 @@ import { SetupNotice } from "@/components/SetupNotice";
 import { db } from "@/lib/db";
 import { transactions } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth/guard";
+import { DEMO_USER_EMAIL } from "@/lib/demo";
 import { computeUsageFacts } from "@/lib/facts";
 import { formatPaise } from "@/lib/money";
 import { istMonthRange } from "@/lib/time";
@@ -50,7 +51,10 @@ export default async function DashboardPage() {
               {month.label} · {user.plan === "pro" ? "Pro" : "Free"} plan
             </p>
           </div>
-          <ResetDemoButton />
+          {/* Only the demo account can actually use this — the endpoint answers
+              every other account 403. Offering it to everyone put a control on
+              the page that could not work for the person looking at it. */}
+          {user.email === DEMO_USER_EMAIL && <ResetDemoButton />}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">

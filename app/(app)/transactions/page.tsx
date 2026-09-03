@@ -167,6 +167,9 @@ export default async function TransactionsPage({
           action={addTransactionAction}
           className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
         >
+          {/* So the outcome comes back to the month being looked at, not to
+              whatever month today happens to fall in. */}
+          <input type="hidden" name="month" value={shownMonth} />
           <label className="block lg:col-span-2">
             <span className="mb-1 block text-xs text-muted">Merchant</span>
             <input
@@ -266,6 +269,7 @@ export default async function TransactionsPage({
                     <td className="px-4 py-2 text-right">
                       <form action={deleteTransactionAction}>
                         <input type="hidden" name="id" value={row.id} />
+                        <input type="hidden" name="month" value={shownMonth} />
                         <button
                           type="submit"
                           className="rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-agent-tint hover:text-bad"

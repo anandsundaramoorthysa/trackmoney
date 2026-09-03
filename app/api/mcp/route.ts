@@ -142,7 +142,16 @@ async function callTool(name: string, args: Record<string, unknown>) {
   }
 
   if (name === "get_purchase_terms") {
-    const terms = await purchaseTerms(String(args.productId ?? "pro"));
+    const productId = String(args.productId ?? "pro");
+    const terms = await purchaseTerms(productId);
+    // Same answer as the HTTP transport: no terms exist for a product we do
+    // not sell, and inventing a null price for one helps nobody.
+    if (!terms) {
+      return toolResult(
+        `No purchasable product with id "${productId}". Call list_products to see what is on sale.`,
+        true,
+      );
+    }
     return toolResult(JSON.stringify(terms, null, 2));
   }
 

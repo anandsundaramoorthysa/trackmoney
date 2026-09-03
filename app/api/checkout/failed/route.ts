@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { handleRouteError } from "@/lib/api-errors";
@@ -38,6 +39,12 @@ async function handlePOST(request: Request) {
     paymentId: body.paymentId ?? null,
     reason: (body.reason ?? "Razorpay reported the payment as failed.").slice(0, 300),
   });
+
+  // Both pages render this order. Without these, billing still says "No orders
+  // yet" after a decline and only tells the truth once the user reloads by
+  // hand — which reads as the failure not having been recorded at all.
+  revalidatePath("/billing");
+  revalidatePath("/agent-activity");
 
   return NextResponse.json({ recorded: true });
 }

@@ -292,7 +292,9 @@ export function proAnswerTemplate(facts: UsageFacts): string {
   return [
     `You are on Pro, so there is no cap on transactions — you have logged ${facts.txnCountThisMonth} in ${facts.monthLabel}.`,
     facts.recurringCount > 0
-      ? `I am tracking ${facts.recurringCount} recurring charges for you: ${listRecurring(facts)}.`
+      ? `I am tracking ${facts.recurringCount} recurring ${
+          facts.recurringCount === 1 ? "charge" : "charges"
+        } for you: ${listRecurring(facts)}.`
       : "I am not seeing any recurring charges yet.",
     topCategoryLine(facts),
     "Ask me anything about your spending.",

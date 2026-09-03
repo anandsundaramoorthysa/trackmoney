@@ -4,6 +4,7 @@ import { isMatchType, type CategoryRule, type MatchType } from "@/lib/categorize
 import { db } from "@/lib/db";
 import { categoryRules } from "@/lib/db/schema";
 import { isUniqueViolation } from "@/lib/db/errors";
+import { isUuid } from "@/lib/ids";
 import { CATEGORIES } from "@/lib/categories";
 
 /**
@@ -106,6 +107,9 @@ export async function createRule(input: {
 
 /** Scoped to the owner, so an id from somewhere else deletes nothing. */
 export async function deleteRule(userId: string, id: string): Promise<boolean> {
+  // As in deleteTransaction: a malformed id is "no such rule", not a 500.
+  if (!isUuid(id)) return false;
+
   const removed = await db
     .delete(categoryRules)
     .where(and(eq(categoryRules.id, id), eq(categoryRules.userId, userId)))
