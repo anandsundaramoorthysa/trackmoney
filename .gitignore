@@ -50,3 +50,8 @@ coverage/
 # ARCHITECTURE.md, which are the two documents that are published.
 PITCH.md
 docs/
+
+# The backup demo video and everything used to make it. A local production
+# artifact, like the pitch: the repository is the submission, not the footage.
+video/
+
