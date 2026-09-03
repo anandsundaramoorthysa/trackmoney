@@ -23,5 +23,18 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  /*
+    The test harness is not part of the application build.
+
+    `tests/` is deliberately not in the repository, but `playwright.config.ts`
+    is — and it imports from `./tests/harness` and `./tests/e2e/pace`. So a
+    fresh clone could never compile that file, and `next build` typechecks the
+    whole project: the first deployment built from git rather than from a
+    developer's machine failed with "Cannot find module './tests/harness'".
+
+    Excluding them here is not a way of skipping a check. Neither file ships to
+    a user, and both are still typechecked locally by `npm run typecheck:tests`
+    where the harness actually exists.
+  */
+  "exclude": ["node_modules", "tests", "playwright.config.ts"]
 }

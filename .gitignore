@@ -30,6 +30,8 @@ playwright-report/
 # run locally. README.md and docs/ are public and stay tracked.
 PLAN.md
 tests/
+# Meaningless without tests/, so it travels with them.
+tsconfig.tests.json
 
 # misc
 .DS_Store
