@@ -107,6 +107,38 @@ export async function hasAffirmativeAfterSuggestion(
   return consentIsLive;
 }
 
+/**
+ * Is there a drafted transaction still waiting to be confirmed?
+ *
+ * This exists to stop a yes-or-no being applied to the wrong subject. The
+ * classifier was written when the upgrade was the only thing a person could
+ * agree to, so every "no" was read as declining the sale. Drafting added a
+ * second thing to say no to, and the two are not interchangeable: "no, it was
+ * 450 not 4500" is somebody correcting a draft, and it was being recorded as a
+ * permanent refusal of an upgrade they had not been offered — unrecoverable,
+ * because a conversation only moves out of "declined" by starting a new one.
+ *
+ * A draft is pending when the newest thing the agent said was a draft. Anything
+ * later — a confirmation, another answer — means the card is gone and a no is
+ * about the sale again.
+ */
+export async function hasPendingDraft(conversationId: string): Promise<boolean> {
+  const [latest] = await db
+    .select()
+    .from(agentEvents)
+    .where(
+      and(
+        eq(agentEvents.conversationId, conversationId),
+        inArray(agentEvents.type, ["suggestion", "agent_reply"]),
+      ),
+    )
+    .orderBy(desc(agentEvents.createdAt), desc(agentEvents.id))
+    .limit(1);
+
+  const meta = latest?.meta as { stage?: string } | null | undefined;
+  return meta?.stage === "drafted";
+}
+
 export async function transcript(
   conversationId: string,
   limit = 12,

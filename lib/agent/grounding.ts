@@ -20,7 +20,29 @@ function normalise(token: string): string {
   return Number.isFinite(asNumber) ? String(asNumber) : cleaned;
 }
 
-export function allowedNumberStrings(facts: UsageFacts): Set<string> {
+/**
+ * A transaction the agent has just drafted from the user's own sentence.
+ *
+ * Its figures are not in the facts — they cannot be, the row does not exist
+ * yet — so every sentence describing the draft was being discarded as
+ * ungrounded and replaced by an account summary that never mentioned it.
+ *
+ * Admitting them is not a loosening, and the distinction matters. These digits
+ * came out of `rupeesToPaise` and `isRealDate` parsing what the user typed:
+ * deterministic, refused outright when it does not parse, and never produced by
+ * the model. That is the same provenance the facts have. What grounding forbids
+ * is a figure the model invented, and a number the user themselves supplied is
+ * the opposite of one.
+ */
+export type GroundedProposal = {
+  amountPaise: number;
+  occurredOn: string;
+};
+
+export function allowedNumberStrings(
+  facts: UsageFacts,
+  proposal?: GroundedProposal | null,
+): Set<string> {
   // Rupee figures only, never the paise originals.
   //
   // The model is handed formatted rupees and never sees paise, so no honest
@@ -61,6 +83,17 @@ export function allowedNumberStrings(facts: UsageFacts): Set<string> {
   const yearMatch = facts.monthLabel.match(/\d{4}/);
   if (yearMatch) values.push(Number(yearMatch[0]));
 
+  if (proposal) {
+    values.push(paiseToRupeeNumber(proposal.amountPaise));
+    // "2026-09-02" is read as three figures by the token scanner, so all three
+    // have to be allowed or the date cannot be repeated back to the person who
+    // just supplied it.
+    for (const part of proposal.occurredOn.split("-")) {
+      const n = Number(part);
+      if (Number.isFinite(n)) values.push(n);
+    }
+  }
+
   return new Set(values.map((v) => normalise(String(v))));
 }
 
@@ -72,8 +105,9 @@ export type GroundingResult = {
 export function checkGrounding(
   text: string,
   facts: UsageFacts,
+  proposal?: GroundedProposal | null,
 ): GroundingResult {
-  const allowed = allowedNumberStrings(facts);
+  const allowed = allowedNumberStrings(facts, proposal);
   const tokens = text.match(/\d[\d,]*(?:\.\d+)?/g) ?? [];
   const offending = [
     ...new Set(tokens.filter((token) => !allowed.has(normalise(token)))),
@@ -318,4 +352,95 @@ export function declineTemplate(): string {
 
 export function checkoutReadyTemplate(amountPaise: number): string {
   return `Your ${formatPaise(amountPaise)} test-mode order is ready. I cannot complete a payment myself — use the button below to open Razorpay's checkout and authorise it there.`;
+}
+
+/* ------------------------------------------------------------------ */
+/* The vocabulary the assistant did not have                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * None of the four templates below quotes the price, and that is load-bearing
+ * rather than stylistic.
+ *
+ * `explainedUpgrade` is decided by whether a reply contains the price, and it
+ * is what moves a conversation to "pitched" — the state a later yes is checked
+ * against. So any sentence carrying the price spends the one pitch the agent
+ * is allowed. Saying hello, asking what this is, or asking about the weather
+ * used to fall through to the full account summary, which does carry it. The
+ * pitch was being spent on people who had not asked a question about buying
+ * anything, and the real offer, when it came, was already used up.
+ */
+
+/**
+ * Someone said hello and nothing else.
+ *
+ * Two capabilities, no price, no question that a yes could answer. The month is
+ * named because it is the one thing a person needs to know before asking about
+ * their own data: this reads the month on screen, not all of history.
+ */
+export function greetingTemplate(facts: UsageFacts): string {
+  return `I am Tracky AI. I can tell you where your money went in ${facts.monthLabel}, or draft a transaction for you to confirm if you tell me what you spent.`;
+}
+
+/**
+ * "Who are you", "what can you do", "are you a bot".
+ *
+ * States the limits in the same breath as the abilities, because the limits are
+ * the interesting part: an assistant inside a payments app that says plainly it
+ * cannot take a payment is making the strongest claim it has.
+ */
+export function identityTemplate(facts: UsageFacts): string {
+  return `I am Tracky AI, the assistant inside TrackMoney. I read this account's spending for ${facts.monthLabel} and the month before it, and I can draft a transaction for you to confirm. I do not save anything myself, and I cannot take a payment.`;
+}
+
+/**
+ * The question was about this account, but the answer is not in the facts.
+ *
+ * The agent had no way to say this. A question about a month it cannot see fell
+ * through to the ordinary answer template, which confidently answered about a
+ * different month — the failure mode that looks most like lying, because the
+ * shape of the reply is indistinguishable from a real answer.
+ *
+ * Naming what it *can* see is the useful half: it turns a refusal into the next
+ * question the person can usefully ask.
+ */
+export function cannotAnswerTemplate(facts: UsageFacts): string {
+  return `I can only see ${facts.monthLabel} and the month before it, so I cannot answer that. For ${facts.monthLabel} I have your total, your largest categories, and how many of your charges repeat.`;
+}
+
+/**
+ * The question was not about this account at all.
+ *
+ * One sentence, no pivot, no offer to help with something adjacent. There is no
+ * code gate behind this one and it would be dishonest to imply otherwise:
+ * `checkGrounding` only inspects digits, so "it is sunny in Bangalore" passes
+ * every check this codebase has. A sentence with no numbers in it cannot be
+ * caught by a numbers check. The prompt rule and this template are the whole
+ * defence, and the reason the defence is acceptable is that the tool gates —
+ * which are real — mean an off-topic answer is embarrassing rather than
+ * expensive.
+ */
+export function offTopicTemplate(): string {
+  return "That is outside what I do — I only read this account's spending.";
+}
+
+/**
+ * What the agent says when it has drafted a transaction.
+ *
+ * Without this the reply beside a draft card was the account summary and an
+ * upgrade pitch, because the drafted amount is not in the facts and so every
+ * sentence naming it was discarded as ungrounded. The card said ₹450 and the
+ * sentence above it talked about something else entirely.
+ *
+ * The wording is the sentence the audit trail already recorded for this event,
+ * so the live turn and the reloaded history now say the same thing instead of
+ * the conversation gaining a message it never contained.
+ */
+export function proposalTemplate(proposal: {
+  merchant: string;
+  amountPaise: number;
+  category: string;
+  occurredOn: string;
+}): string {
+  return `Drafted ${formatPaise(proposal.amountPaise)} at ${proposal.merchant} on ${proposal.occurredOn}, filed under ${proposal.category}. Nothing is saved until you confirm it below.`;
 }

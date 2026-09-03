@@ -88,7 +88,7 @@ export function AgentPanel({
             text:
               problem.setupRequired && problem.error
                 ? `I am not set up yet — ${problem.error}`
-                : "I could not reach my backend just now. The Billing page still works on its own.",
+                : "I could not read your account just now. The Billing page still works on its own.",
           });
           return;
         }
@@ -216,13 +216,13 @@ export function AgentPanel({
 
   return (
     <section
-      aria-label="TrackMoney assistant"
+      aria-label="Tracky AI"
       className="flex h-[70dvh] min-h-[480px] flex-col overflow-hidden rounded-xl border border-line bg-surface"
     >
       <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-agent" aria-hidden />
-          <h2 className="text-sm font-semibold">TrackMoney assistant</h2>
+          <h2 className="text-sm font-semibold">Tracky AI</h2>
         </div>
         <span className="text-xs text-muted">
           {plan === "pro" ? "Pro account" : "Free account"}
@@ -371,7 +371,7 @@ export function AgentPanel({
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask what Pro changes, or say yes to upgrade"
+          placeholder="Ask about your spending, or tell me what you spent"
           maxLength={500}
           className="flex-1 rounded-lg border border-line bg-canvas px-3 py-2 text-sm outline-none placeholder:text-muted focus:border-brand"
         />

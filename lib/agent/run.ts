@@ -4,25 +4,33 @@ import type { Conversation, User } from "@/lib/db/schema";
 import { computeUsageFacts, hasUpgradeCase, type UsageFacts } from "@/lib/facts";
 import {
   getOrCreateConversation,
+  hasPendingDraft,
   setConversationState,
   transcript,
 } from "./conversation";
 import {
   answerTemplate,
+  cannotAnswerTemplate,
   checkClaims,
   checkGrounding,
   declineTemplate,
   declinedAnswerTemplate,
+  greetingTemplate,
+  identityTemplate,
+  offTopicTemplate,
   proAnswerTemplate,
+  proposalTemplate,
   reopenAfterDeclineTemplate,
   suggestionTemplate,
 } from "./grounding";
+import { classifyTopic } from "./answers";
 import { classifyIntent, INTENT_EXPLANATION, type Intent } from "./intent";
 import type { TransactionProposal } from "@/lib/agent/proposal";
 import { callLLM, parseJsonLoosely, type LlmProvider } from "./llm";
 import { buildUserPrompt, SYSTEM_PROMPT } from "./prompt";
 import {
   isToolName,
+  TOOL_NAMES,
   runCreateCheckoutOrder,
   runExplainSuggestion,
   runProposeTransaction,
@@ -200,6 +208,44 @@ export async function runAgentTurn(input: {
       };
     }
 
+    /**
+     * A no about a draft is not a no about the sale.
+     *
+     * Checked before the decline branch because declining is the one
+     * irreversible thing a user can do here — the file that classifies intent
+     * says exactly that, and then inferred it from a message about a different
+     * subject. Rejecting a draft discards the card and says so; it must never
+     * reach `setConversationState(..., "declined")`.
+     */
+    if (intent === "negative" && (await hasPendingDraft(conversation.id))) {
+      const reply =
+        "Dropped that draft — nothing was saved. Tell me the right amount and what it was for, and I will draft it again.";
+
+      await logAgentEvent({
+        userId: user.id,
+        conversationId: conversation.id,
+        type: "agent_reply",
+        explanation: reply,
+        meta: {
+          provider: "template",
+          reason: "draft_rejected",
+          note: "A no while a draft was on screen rejects the draft. The plan is untouched and the conversation stays open.",
+        },
+      });
+
+      return {
+        conversationId: conversation.id,
+        state: conversation.state,
+        reply,
+        provider: "template",
+        checkout: null,
+        proposal: null,
+        toolRequested: "none",
+        toolOutcome: "not_requested",
+        grounding: "template_only",
+      };
+    }
+
     // A no ends it here. No model call, nothing to decide.
     if (intent === "negative") {
       await setConversationState(conversation.id, "declined");
@@ -291,7 +337,7 @@ export async function runAgentTurn(input: {
       userId: user.id,
       conversationId: conversation.id,
       type: "tool_refused",
-      explanation: `The model asked for a tool that does not exist ("${String(choice?.tool)}"). Only explainSuggestion and createCheckoutOrder are callable.`,
+      explanation: `The model asked for a tool that does not exist ("${String(choice?.tool)}"). Only ${TOOL_NAMES.join(", ")} are callable.`,
       meta: { rule: "closed_toolset", requested: choice?.tool },
     });
   }
@@ -300,14 +346,36 @@ export async function runAgentTurn(input: {
   let checkout: CheckoutHandoff | null = null;
   let toolOutcome: AgentTurnResult["toolOutcome"] = "not_requested";
   let proposal: TransactionProposal | null = null;
-  // Neither an account that already pays nor one that has said no should be
-  // offered the upgrade again, so the fallback wording depends on both.
-  const fallbackAnswer = () =>
-    user.plan === "pro"
-      ? proAnswerTemplate(facts)
-      : conversation.state === "declined"
-        ? declinedAnswerTemplate(facts)
-        : answerTemplate(facts);
+  /**
+   * The floor, chosen by subject first and then by account.
+   *
+   * The subject cases come first because they are the ones that were being
+   * answered with something else entirely, and because none of them quotes the
+   * price. That last part is not incidental: `explainedUpgrade` is decided by
+   * whether a reply contains the price, so routing a hello or a weather
+   * question through the account summary spent the single pitch the agent gets
+   * on somebody who had not asked to buy anything.
+   *
+   * Everything unmatched still lands on `answerTemplate`, deliberately. It is
+   * the reply an unclear turn has to produce for a following yes to be
+   * accepted, and narrowing it would break the consent chain rather than the
+   * wording.
+   */
+  const topic = classifyTopic(message, intent, facts);
+
+  const fallbackAnswer = () => {
+    if (topic === "greeting") return greetingTemplate(facts);
+    if (topic === "off_topic") return offTopicTemplate();
+
+    // A paying account keeps its own wording for everything else: it has
+    // nothing to be sold, and the ordinary template ends by selling.
+    if (user.plan === "pro") return proAnswerTemplate(facts);
+
+    if (topic === "identity") return identityTemplate(facts);
+    if (topic === "out_of_range") return cannotAnswerTemplate(facts);
+    if (conversation.state === "declined") return declinedAnswerTemplate(facts);
+    return answerTemplate(facts);
+  };
 
   let deterministicReply = fallbackAnswer();
   let eventType: "suggestion" | "agent_reply" = "agent_reply";
@@ -335,6 +403,11 @@ export async function runAgentTurn(input: {
       // The card carries the numbers; whatever the model wrote alongside is
       // still grounding-checked like any other sentence.
       proposal = outcome.proposal ?? null;
+      // ...and when that check discards it, the floor has to describe the card
+      // rather than the account. It fell back to the summary-and-pitch template,
+      // so somebody who said "I spent 450 on lunch" got a draft for 450 sitting
+      // underneath a paragraph about their transaction cap.
+      if (proposal) deterministicReply = proposalTemplate(proposal);
     } else {
       toolOutcome = "refused";
       deterministicReply = outcome.message;
@@ -353,7 +426,15 @@ export async function runAgentTurn(input: {
       toolOutcome = "refused";
       deterministicReply =
         outcome.rule === "no_recorded_consent"
-          ? "I do not have a clear yes on record yet, so I have not created anything. Do you want me to prepare the Pro checkout?"
+          ? // The old wording asked a question it could not accept the answer
+            // to. `explainedUpgrade` is decided by whether a reply quotes the
+            // price, and this sentence did not, so the conversation never
+            // reached "pitched" and the next yes was refused with the same
+            // sentence — forever. It was masked only because the agent used to
+            // open every conversation with a pitch of its own. Quoting the
+            // price makes the sentence self-consistent: it asks for a yes to a
+            // thing whose cost it states, which is the only kind this accepts.
+            `I do not have a clear yes on record yet, so I have not created anything. Pro is a one-time ${formatPaise(facts.proPricePaise)} unlock — say yes and I will prepare the checkout for you to authorise.`
           : outcome.message;
       modelReply = null;
     }

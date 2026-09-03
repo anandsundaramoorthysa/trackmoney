@@ -12,7 +12,12 @@
  * agree to be charged.
  */
 
-export type Intent = "affirmative" | "negative" | "question" | "unclear";
+export type Intent =
+  | "affirmative"
+  | "negative"
+  | "question"
+  | "unclear"
+  | "greeting";
 
 /**
  * An unambiguous refusal. These end the conversation even when a question is
@@ -74,12 +79,54 @@ const QUESTION_WORDS = [
   /\bwhy\b/,
   /\bwhich\b/,
   /\bwhen\b/,
+  // "who" and "where" were missing, so "who are you" — the first thing anyone
+  // types at something with a name — was not classified as a question at all.
+  // It fell through to unclear and was answered with a spending summary.
+  /\bwho\b/,
+  /\bwhere\b/,
   /\bcan i\b/,
   /\bdo i\b/,
   /\bis it\b/,
   /\bexplain\b/,
   /\btell me\b/,
 ];
+
+/**
+ * A message that is only a greeting.
+ *
+ * Anchored end to end on purpose: "hi" is a greeting, "hi, what did I spend on
+ * food" is a question with a greeting stuck to the front, and answering the
+ * second one with an introduction would be worse than useless.
+ *
+ * This exists because "hi" used to fall through to unclear, which answered with
+ * the full account summary — and that summary quotes the price, which is what
+ * marks the upgrade as having been explained. Saying hello counted as having
+ * been pitched, and the pitch itself was then spent on somebody who had not
+ * asked for it.
+ */
+/**
+ * "ok" on its own, meaning "I read that" and not "charge me".
+ *
+ * A bare "ok" is in the affirmative list and belongs there — "ok why not" and
+ * "ok, do it" are consent. But the same token ends an acknowledgement, and
+ * "ok thanks" was creating a ₹499 order. In Indian English, as in most
+ * English, an unaccompanied "ok" closes a sentence rather than authorising
+ * one, and the closing is by far the more common reading.
+ *
+ * So the affirmative rule stands and this narrow shape is carved out of it:
+ * the whole message is "ok", optionally followed by a word that only ever ends
+ * a conversation. Anything with an instruction in it is untouched.
+ *
+ * This is the same collision the file already fixed for "I'm not sure"
+ * containing "sure" — a consent token sitting inside a phrase that is not
+ * consent — and the asymmetry it argues from applies unchanged: a yes that
+ * goes unrecognised costs one turn, a yes that was never given costs money.
+ */
+const ACKNOWLEDGEMENT_ONLY =
+  /^(?:ok(?:ay)?|k|kk)\b[\s!.,]*(?:thanks|thank you|thanks a lot|ty|got it|noted|cool|fine|great|nice|sure thing|understood)?[\s!.,]*$/;
+
+const GREETING =
+  /^(?:hi|hii+|hey|hello|helo|yo|namaste|hola|good\s+(?:morning|afternoon|evening)|greetings)\b[\s!.,]*(?:there|tracky(?:\s+ai)?)?[\s!.,?]*$/;
 
 /**
  * Phrases that carry a refusal word without being a refusal.
@@ -103,6 +150,16 @@ const NOT_A_REFUSAL =
 export function classifyIntent(message: string): Intent {
   const text = message.toLowerCase().trim();
   if (!text) return "unclear";
+
+  // Before anything else, and before the refusal test: "no" is not in any
+  // greeting, but "good evening" would otherwise be read for its words rather
+  // than as the whole message it is.
+  if (GREETING.test(text)) return "greeting";
+
+  // Checked on the raw message, before the rhetorical phrases are stripped:
+  // "ok why not" must keep its "why not", or it collapses to a bare "ok" and
+  // reads as the acknowledgement it is not.
+  if (ACKNOWLEDGEMENT_ONLY.test(text)) return "unclear";
 
   const meaningful = text.replace(NOT_A_REFUSAL, " ");
 
@@ -146,4 +203,5 @@ export const INTENT_EXPLANATION: Record<Intent, string> = {
   negative: "Read the reply as a no. The conversation is closed and the agent will not pitch again.",
   question: "Read the reply as a question. The agent may answer, but may not create a checkout.",
   unclear: "Could not read a clear yes or no. Treated as not consenting.",
+  greeting: "Read the reply as a greeting and nothing more. No consent, and no pitch is spent on it.",
 };

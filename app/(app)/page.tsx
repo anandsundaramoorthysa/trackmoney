@@ -101,7 +101,7 @@ export default async function DashboardPage() {
           <span className="min-w-0">
             <span className="flex items-center gap-2 text-sm font-semibold">
               <span className="h-2 w-2 rounded-full bg-agent" aria-hidden />
-              TrackMoney assistant
+              Tracky AI
             </span>
             <span className="mt-1 block max-w-xl text-sm text-muted">
               It reads the month above and can prepare an upgrade for you to
