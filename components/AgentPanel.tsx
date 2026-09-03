@@ -265,11 +265,16 @@ export function AgentPanel({
        * `min-h-[480px]` made the panel taller than a landscape phone, so the
        * message box sat 289px below the fold — and a phone keyboard shrinks the
        * viewport to about that height, which meant focusing the input pushed
-       * the input out of view. In portrait it was 91px under. The floor is now
-       * small enough to fit a short viewport, and the cap is measured from the
-       * top of the panel so what is left of the screen is what it takes.
+       * the input out of view. In portrait it was 91px under.
+       *
+       * The 16rem is measured, not guessed: the banner, the bar, the page
+       * heading, the gap and the main element's own bottom padding come to
+       * 226px above the panel on a 375px phone, and this leaves 30px of slack
+       * under the send button. The floor is 14rem so a landscape phone — the
+       * same height a keyboard leaves behind — still fits the whole panel
+       * rather than pushing its own input off the screen.
        */
-      className="flex h-[calc(100dvh-11rem)] max-h-[42rem] min-h-[20rem] flex-col overflow-hidden rounded-xl border border-line bg-surface"
+      className="flex h-[calc(100dvh-16rem)] max-h-[42rem] min-h-[14rem] flex-col overflow-hidden rounded-xl border border-line bg-surface"
     >
       <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div className="flex items-center gap-2">
