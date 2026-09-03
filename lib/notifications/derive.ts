@@ -58,17 +58,28 @@ export function monthKey(facts: UsageFacts): string {
 }
 
 /**
- * A charge that repeats, identified by what makes it that charge.
+ * The set of charges that repeat, identified by what makes it that set.
  *
- * Merchant and amount, and deliberately not the month. A subscription is news
- * the first time it is spotted and not every thirty days afterwards, so the key
- * has to survive the calendar. A price change produces a different key and
- * fires again, which is correct — "this costs something else now" is news — and
- * it is why the wording below says a charge repeats at the same amount rather
- * than calling it new.
+ * Deliberately not the month. A subscription is news the first time it is
+ * spotted and not every thirty days afterwards, so the key has to survive the
+ * calendar. A charge appearing, disappearing or changing price produces a
+ * different key and fires once more, which is correct — that is news — and it
+ * is why the wording says charges repeat at the same amount rather than calling
+ * any of them new.
+ *
+ * One key for the whole set rather than one per charge, and that is not an
+ * optimisation. On Free the body cannot name a merchant, so a row per charge
+ * rendered as three rows reading exactly the same sentence — which looks like a
+ * bug, and pads a badge that is supposed to mean something. The body was always
+ * written for the set: it counts them and, on Pro, lists them.
  */
-function recurringKey(merchant: string, amountPaise: number): string {
-  return `new_recurring:${merchant.toLowerCase().trim()}|${amountPaise}`;
+function recurringKey(
+  candidates: { merchant: string; amountPaise: number }[],
+): string {
+  const parts = candidates
+    .map((c) => `${c.merchant.toLowerCase().trim()}|${c.amountPaise}`)
+    .sort();
+  return `new_recurring:${parts.join(",")}`;
 }
 
 /**
@@ -108,10 +119,10 @@ export function deriveNotifications(
   // account gets — so the bell is where Pro delivers rather than where it is
   // sold. On Free the count is notified and the merchant is not, because naming
   // it would give away the thing the paid plan is for.
-  for (const candidate of facts.recurringCandidates) {
+  if (facts.recurringCandidates.length > 0) {
     out.push({
       kind: "new_recurring",
-      dedupKey: recurringKey(candidate.merchant, candidate.amountPaise),
+      dedupKey: recurringKey(facts.recurringCandidates),
     });
   }
 

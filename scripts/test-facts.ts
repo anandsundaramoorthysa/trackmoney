@@ -6,6 +6,10 @@ import { canonical, generateKeyPairPem, sign, verify } from "@/lib/signing";
 import { neutraliseUserText } from "@/lib/agent/grounding";
 import { classifyIntent } from "@/lib/agent/intent";
 import type { UsageFacts } from "@/lib/facts";
+import {
+  deriveNotifications,
+  renderNotification,
+} from "@/lib/notifications/derive";
 import { formatPaise } from "@/lib/money";
 import { csvCell } from "@/lib/csv";
 import { categoryFor, suggestPattern, type CategoryRule } from "@/lib/categorize";
@@ -487,6 +491,126 @@ test("\"why not\" is agreement, unless it is actually being asked", () => {
   // than a checkout.
   assert.equal(classifyIntent("why not?"), "question");
   assert.equal(classifyIntent("why not upgrade?"), "question");
+});
+
+/* ------------------------------------------------------------------ */
+/* The bell                                                            */
+/* ------------------------------------------------------------------ */
+
+test("a Free account is told how many charges repeat, once", () => {
+  /**
+   * The bug this exists for shipped, and only a look at the deployed bell
+   * caught it: one row was emitted per repeating charge, but the body is
+   * written for the whole set and on Free it cannot name a merchant — so three
+   * charges rendered three rows reading exactly the same sentence, and the
+   * badge counted all three.
+   *
+   * A count is one fact. Delete the grouping and this goes red.
+   */
+  const derived = deriveNotifications(FACTS, "open");
+  const recurring = derived.filter((d) => d.kind === "new_recurring");
+
+  assert.equal(recurring.length, 1, JSON.stringify(derived));
+});
+
+test("a new repeating charge is news; the same ones are not", () => {
+  const before = deriveNotifications(FACTS, "open").find(
+    (d) => d.kind === "new_recurring",
+  );
+
+  // The same charges next month must reuse the key, or the bell fires again
+  // every thirty days about something the person already knows.
+  const nextMonth = deriveNotifications(
+    { ...FACTS, monthLabel: "September 2026" },
+    "open",
+  ).find((d) => d.kind === "new_recurring");
+  assert.equal(before?.dedupKey, nextMonth?.dedupKey);
+
+  // A charge that was not there before is a different set, and does fire.
+  const withAnother = deriveNotifications(
+    {
+      ...FACTS,
+      recurringCandidates: [
+        ...FACTS.recurringCandidates,
+        { merchant: "Spotify Premium", amountPaise: 11_900, monthsSeen: 3 },
+      ],
+      recurringCount: 3,
+    },
+    "open",
+  ).find((d) => d.kind === "new_recurring");
+  assert.notEqual(before?.dedupKey, withAnother?.dedupKey);
+});
+
+test("the upgrade is never offered to somebody who said no, or already paid", () => {
+  const declined = deriveNotifications(FACTS, "declined");
+  assert.equal(
+    declined.some((d) => d.kind === "upgrade_available"),
+    false,
+  );
+  // ...and neither is the anticipatory cap nudge, whose only suggested action
+  // is the one they refused. The cap being *reached* still fires: that is a
+  // fact about the account, not a pitch.
+  assert.equal(
+    declined.some((d) => d.kind === "cap_near"),
+    false,
+  );
+
+  const paid = deriveNotifications(
+    { ...FACTS, currentPlan: "pro", showsRecurringDetail: true },
+    "open",
+  );
+  assert.equal(
+    paid.some((d) => d.kind === "upgrade_available"),
+    false,
+  );
+  assert.equal(
+    paid.some((d) => d.kind === "cap_near" || d.kind === "cap_reached"),
+    false,
+  );
+});
+
+test("every notification body passes the checks every reply passes", () => {
+  /**
+   * The reason these are templated rather than generated is that they can be
+   * checked by the same functions. This is what makes that a property rather
+   * than a claim in a comment: a template that hardcodes a figure, or reaches
+   * for the cap where it meant the remainder, fails here.
+   */
+  for (const kinds of [
+    { facts: FACTS, state: "open" as const },
+    { facts: { ...FACTS, atCap: true, remainingOnFree: 0, txnCountThisMonth: 20 }, state: "open" as const },
+    { facts: { ...FACTS, currentPlan: "pro" as const, showsRecurringDetail: true }, state: "open" as const },
+  ]) {
+    for (const derived of deriveNotifications(kinds.facts, kinds.state)) {
+      const rendered = renderNotification(derived.kind, kinds.facts);
+      const grounded = checkGrounding(rendered.body, kinds.facts);
+      assert.equal(
+        grounded.ok,
+        true,
+        `${derived.kind}: ${JSON.stringify(grounded.offending)} in "${rendered.body}"`,
+      );
+      assert.equal(
+        checkClaims(rendered.body, kinds.facts).ok,
+        true,
+        `${derived.kind}: "${rendered.body}"`,
+      );
+    }
+  }
+});
+
+test("a Free notification never names what Pro is selling", () => {
+  const rendered = renderNotification("new_recurring", FACTS);
+  assert.equal(rendered.body.includes("Cult.fit"), false, rendered.body);
+  assert.equal(rendered.body.includes("Netflix India"), false, rendered.body);
+
+  // And a paying account does get the names — so this cannot be satisfied by a
+  // template that simply never mentions a merchant.
+  const paid = renderNotification("new_recurring", {
+    ...FACTS,
+    currentPlan: "pro",
+    showsRecurringDetail: true,
+  });
+  assert.equal(paid.body.includes("Cult.fit"), true, paid.body);
 });
 
 test("a failing route does not describe the database to the caller", async () => {
