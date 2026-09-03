@@ -193,6 +193,14 @@ export function AgentPanel({
           role: "agent",
           text: `That payment did not go through — ${result.reason} You are still on Free and nothing was charged. You can try again from the Billing page whenever you want.`,
         });
+      } else if (result.outcome === "unavailable") {
+        // The order stands: the window failed to open, so there is nothing to
+        // withdraw and the handoff is left in place to try again.
+        push({
+          id: `unavailable-${Date.now()}`,
+          role: "agent",
+          text: `Razorpay's checkout would not open — ${result.reason} The order is still prepared, so you can try the button again or use the Billing page.`,
+        });
       } else {
         push({
           id: `dismiss-${Date.now()}`,

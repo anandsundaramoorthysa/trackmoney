@@ -55,6 +55,14 @@ export function UpgradeButton({
         setTone("bad");
         setStatus(`Payment failed — ${result.reason} Your plan is unchanged.`);
         router.refresh();
+      } else if (result.outcome === "unavailable") {
+        // The window never opened, which is not the same as a person closing
+        // it. Saying "checkout closed" here would describe something that did
+        // not happen and hide the reason.
+        setTone("bad");
+        setStatus(
+          `Checkout could not open — ${result.reason} Nothing was charged.`,
+        );
       } else {
         setTone("muted");
         setStatus("Checkout closed. Nothing was charged.");

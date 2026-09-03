@@ -60,7 +60,42 @@ export type CheckoutOrder = {
 export type CheckoutResult =
   | { outcome: "success"; amountPaise: number }
   | { outcome: "failed"; reason: string }
-  | { outcome: "dismissed" };
+  | { outcome: "dismissed" }
+  /** Checkout never opened. Nothing was attempted and nothing was charged. */
+  | { outcome: "unavailable"; reason: string };
+
+/**
+ * How long to wait for Razorpay's window to appear.
+ *
+ * There is no "open failed" event to listen for. When Checkout.js cannot start
+ * — its preferences call answering 400 is one way — it shows a browser alert of
+ * its own and our promise is left waiting for a handler that will never fire,
+ * so the button sits on "Opening checkout…" until the page is reloaded.
+ *
+ * Generous, because a slow connection opening the modal is normal and being
+ * told the checkout is unavailable when it was merely slow would be worse than
+ * the wait.
+ */
+const OPEN_WATCHDOG_MS = 20_000;
+
+/** How often to look for the modal while the deadline is still running. */
+const OPEN_POLL_MS = 250;
+
+/**
+ * Is Razorpay's window actually on the page?
+ *
+ * Checkout.js mounts a container and an iframe of its own. Any of these
+ * appearing is proof the handoff happened; which one it is does not matter, so
+ * the check stays loose rather than pinned to a single class name we do not own
+ * and cannot keep up to date.
+ */
+function checkoutIsOnScreen(): boolean {
+  return Boolean(
+    document.querySelector(
+      '.razorpay-container, .razorpay-checkout-frame, iframe[src*="razorpay"]',
+    ),
+  );
+}
 
 export async function openCheckout(
   order: CheckoutOrder,
@@ -75,10 +110,37 @@ export async function openCheckout(
 
   return new Promise<CheckoutResult>((resolve) => {
     let settled = false;
+    // A holder rather than a bare let: it is assigned once, after the settle
+    // function that has to be able to clear it.
+    const timers: { watchdog?: ReturnType<typeof setTimeout> } = {};
+    const nativeAlert = window.alert;
+
     const settle = (result: CheckoutResult) => {
       if (settled) return;
       settled = true;
+      if (timers.watchdog) clearTimeout(timers.watchdog);
+      // Always put the browser's own alert back, whichever way this ended.
+      window.alert = nativeAlert;
       resolve(result);
+    };
+
+    /**
+     * Catch Razorpay's alert and answer it on the page instead.
+     *
+     * Checkout.js reports "Error in opening checkout" through `window.alert`.
+     * A modal browser dialog on a payment screen is the wrong medium on its own
+     * terms — it cannot be styled, read by the page, or dismissed by anything
+     * automated, and it tells the person nothing about what to do next. It is
+     * borrowed for the duration of the handoff and given straight back.
+     */
+    window.alert = (message?: unknown) => {
+      settle({
+        outcome: "unavailable",
+        reason:
+          typeof message === "string" && message.trim()
+            ? message.trim()
+            : "Razorpay could not open the checkout window.",
+      });
     };
 
     const rzp = new RazorpayCtor({
@@ -131,6 +193,58 @@ export async function openCheckout(
       settle({ outcome: "failed", reason: description });
     });
 
-    rzp.open();
+    /**
+     * Opening can fail synchronously, or fail by never doing anything.
+     *
+     * Both leave the caller waiting forever without this: the first throws past
+     * the promise, and the second simply never calls a handler.
+     */
+    try {
+      rzp.open();
+    } catch (error) {
+      settle({
+        outcome: "unavailable",
+        reason:
+          error instanceof Error && error.message
+            ? error.message
+            : "Razorpay could not open the checkout window.",
+      });
+      return;
+    }
+
+    /**
+     * Watch for the window, not for the clock.
+     *
+     * A plain timer after `open()` is wrong on the one case that matters: a
+     * person typing a card number and waiting for an OTP is well past twenty
+     * seconds, and telling them the checkout never opened — "nothing was
+     * charged" — while it stands open in front of them would be false, and
+     * false about money.
+     *
+     * So the deadline runs only until there is evidence the modal exists. Once
+     * it is on screen the handoff has happened and Razorpay's own events finish
+     * the job, however long the person takes.
+     */
+    const deadline = Date.now() + OPEN_WATCHDOG_MS;
+
+    const poll = () => {
+      if (settled) return;
+
+      // It opened. There is nothing left to guard against.
+      if (checkoutIsOnScreen()) return;
+
+      if (Date.now() >= deadline) {
+        settle({
+          outcome: "unavailable",
+          reason:
+            "Razorpay's checkout did not open. Nothing was charged — try again, and if it keeps happening the order is still on your billing page.",
+        });
+        return;
+      }
+
+      timers.watchdog = setTimeout(poll, OPEN_POLL_MS);
+    };
+
+    timers.watchdog = setTimeout(poll, OPEN_POLL_MS);
   });
 }
