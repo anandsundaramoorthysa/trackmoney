@@ -19,6 +19,7 @@ type HistoryMessage = { id: string; role: Message["role"]; text: string };
 
 type TurnResponse = {
   reply: string;
+  explaining?: { id: string; title: string };
   state?: string;
   skipped?: boolean;
   messages?: HistoryMessage[];
@@ -42,12 +43,32 @@ type TurnResponse = {
  * 560px gave, and on a tall monitor it uses the room instead of leaving a gap
  * under the last message. The floor keeps a few turns visible on a short one.
  */
+/**
+ * Four things somebody can actually ask, as buttons that fill the box.
+ *
+ * They fill rather than send. Editing before committing is the point — one of
+ * these is a route to a checkout, and turning a single click into a turn the
+ * person did not compose is exactly the shape this whole change is removing.
+ *
+ * Static strings, deliberately. A personalised example would be a claim about
+ * somebody's money rendered before any grounding check has run.
+ */
+const EXAMPLES = [
+  "What did I spend on Food & Drink this month?",
+  "I spent 200 on coffee",
+  "How close am I to my monthly cap?",
+  "What does Pro include?",
+];
+
 export function AgentPanel({
   profile,
   plan,
+  explainId,
 }: {
   profile: { name: string; email: string };
   plan: "free" | "pro";
+  /** Set when the person arrived by opening a notification. */
+  explainId?: string;
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -56,6 +77,8 @@ export function AgentPanel({
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [meta, setMeta] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+  const [explaining, setExplaining] = useState<string | null>(null);
   const startedRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -70,8 +93,14 @@ export function AgentPanel({
     });
   }, [messages, checkout]);
 
-  // Load whatever the audit trail already recorded, then let the agent open the
-  // conversation if it has not spoken yet.
+  /**
+   * Load what the trail already recorded — and nothing else.
+   *
+   * The agent used to speak here, unprompted, the moment the page mounted. It
+   * does not any more: this is a place to ask things, and what it notices on
+   * its own goes to the bell. The only turn that can start without the person
+   * typing is one they asked for by opening a notification.
+   */
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
@@ -103,29 +132,33 @@ export function AgentPanel({
               text: m.text,
             })),
           );
-          return;
         }
+
+        if (!explainId) return;
 
         const turn: TurnResponse = await fetch("/api/agent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ kind: "start" }),
+          body: JSON.stringify({ kind: "explain", notificationId: explainId }),
         }).then((r) => r.json());
 
-        // Another client had already opened the conversation between our
-        // history fetch and this call, so render what came back rather than
-        // sitting blank.
+        // Already explained — a refresh, a second tab, or a development
+        // double-mount. Render what is on the record rather than asking again;
+        // the upgrade explanation records a pitch and must not record two.
         if (turn.skipped && Array.isArray(turn.messages)) {
           setMessages(
             turn.messages.map((m) => ({ id: m.id, role: m.role, text: m.text })),
           );
-          return;
+        } else if (turn.reply) {
+          push({ id: `explain-${Date.now()}`, role: "agent", text: turn.reply });
+          setMeta(describeTurn(turn));
+          if (turn.checkout) setCheckout(turn.checkout);
         }
 
-        if (turn.reply) {
-          push({ id: `start-${Date.now()}`, role: "agent", text: turn.reply });
-          setMeta(describeTurn(turn));
-        }
+        if (turn.explaining?.title) setExplaining(turn.explaining.title);
+
+        // Drop the parameter so a reload is not a second request to explain.
+        router.replace("/assistant");
       } catch {
         push({
           id: "boot-error",
@@ -134,9 +167,10 @@ export function AgentPanel({
         });
       } finally {
         setBusy(false);
+        setReady(true);
       }
     })();
-  }, [push]);
+  }, [push, explainId, router]);
 
   async function send(text: string) {
     if (!text.trim() || busy) return;
@@ -217,6 +251,14 @@ export function AgentPanel({
   return (
     <section
       aria-label="Tracky AI"
+      /*
+       * Proof the client is running, for anything that needs to wait for it.
+       * The tests used to wait for the agent's first message as a stand-in, and
+       * with no first message that stand-in would have silently passed on
+       * server-rendered markup. This is set in the mount effect's own finally,
+       * so it cannot be satisfied by HTML alone.
+       */
+      data-ready={ready ? "true" : undefined}
       className="flex h-[70dvh] min-h-[480px] flex-col overflow-hidden rounded-xl border border-line bg-surface"
     >
       <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
@@ -229,13 +271,54 @@ export function AgentPanel({
         </span>
       </header>
 
+      {explaining && (
+        <p className="border-b border-line bg-agent-tint px-4 py-2 text-xs text-muted">
+          Explaining: {explaining}
+        </p>
+      )}
+
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+        {/*
+          The empty state. Not a box, and deliberately not a pitch — the last
+          clause is doing real work, because it tells somebody where the thing
+          that used to greet them went.
+        */}
+        {ready && messages.length === 0 && !proposal && (
+          <div className="space-y-3">
+            <p className="max-w-[85%] rounded-2xl rounded-bl-sm border border-line bg-agent-tint px-3.5 py-2.5 text-sm text-ink">
+              Ask me about your spending, or tell me what you spent and I will
+              draft it for you to confirm. Anything I notice on my own goes to
+              the bell, not here.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {EXAMPLES.map((example) => (
+                <button
+                  key={example}
+                  type="button"
+                  onClick={() => setInput(example)}
+                  className="rounded-full border border-line px-3 py-1.5 text-xs text-muted transition-colors hover:bg-brand-tint hover:text-ink"
+                >
+                  {example}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {messages.map((m) => (
           <div
             key={m.id}
             className={m.role === "user" ? "flex justify-end" : "flex justify-start"}
           >
             <p
+              /*
+               * Marks a real turn in the conversation, as distinct from the
+               * empty state — which is deliberately styled like an agent bubble
+               * so the page does not open with a bare box. Without this the two
+               * are indistinguishable to anything reading the DOM, and a test
+               * asking "has the agent spoken?" answers yes when it has not.
+               */
+              data-message-role={m.role}
               className={
                 m.role === "user"
                   ? "max-w-[85%] rounded-2xl rounded-br-sm bg-brand px-3.5 py-2.5 text-sm text-white"

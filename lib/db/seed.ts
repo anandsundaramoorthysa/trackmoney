@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   agentEvents,
+  notifications,
   categoryRules,
   conversations,
   monthQuota,
@@ -206,6 +207,10 @@ export async function seedDatabase(): Promise<SeedSummary> {
    * account's transactions, payments and history while their user row stayed
    * behind looking intact.
    */
+  // Notifications first. They are derived from numbers that are about to be
+  // replaced, so a row surviving the reset would carry pre-reset facts into a
+  // freshly seeded account — and the bell renders its text from that snapshot.
+  await db.delete(notifications).where(eq(notifications.userId, user.id));
   await db.delete(agentEvents).where(eq(agentEvents.userId, user.id));
   await db.delete(payments).where(eq(payments.userId, user.id));
   await db.delete(conversations).where(eq(conversations.userId, user.id));

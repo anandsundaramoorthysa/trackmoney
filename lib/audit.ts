@@ -104,4 +104,5 @@ export const EVENT_LABELS: Record<AgentEventType, string> = {
   checkout_created: "Checkout order created",
   checkout_result: "Payment outcome",
   tool_refused: "Tool call refused",
+  notification_opened: "Notification opened",
 };

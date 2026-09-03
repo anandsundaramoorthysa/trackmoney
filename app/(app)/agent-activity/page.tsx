@@ -144,6 +144,7 @@ const BADGE_STYLES: Record<AgentEventType, string> = {
   checkout_created: "bg-brand-tint text-brand",
   checkout_result: "bg-brand-tint text-ok",
   tool_refused: "bg-agent-tint text-bad",
+  notification_opened: "bg-agent-tint text-agent",
 };
 
 /**

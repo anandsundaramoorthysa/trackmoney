@@ -23,6 +23,7 @@ import {
   reopenAfterDeclineTemplate,
   suggestionTemplate,
 } from "./grounding";
+import { dismissUpgradeNotifications } from "@/lib/notifications/store";
 import { classifyTopic } from "./answers";
 import { classifyIntent, INTENT_EXPLANATION, type Intent } from "./intent";
 import type { TransactionProposal } from "@/lib/agent/proposal";
@@ -123,12 +124,30 @@ function deterministicTool(input: {
   intent: Intent | null;
   state: string;
   facts: UsageFacts;
+  explain: { kind: string; body: string } | null;
 }): ToolName | "none" {
-  if (input.message === null) {
-    return hasUpgradeCase(input.facts) && input.state === "open"
+  /**
+   * Opening the upgrade notification is what records the pitch.
+   *
+   * This used to happen on the unprompted opening turn, and removing that turn
+   * without moving this would have quietly broken consent: `explainSuggestion`
+   * is the only thing that writes the suggestion row, and a yes is only
+   * honoured when it postdates one. The chain is unchanged — an explanation
+   * still comes before the agreement — it now happens somewhere the person
+   * chose to go rather than the moment they arrived.
+   *
+   * The other three kinds record nothing and request nothing. They are facts
+   * about somebody's own account and there is nothing to consent to.
+   */
+  if (input.explain) {
+    return input.explain.kind === "upgrade_available" &&
+      (input.state === "open" || input.state === "pitched")
       ? "explainSuggestion"
       : "none";
   }
+
+  if (input.message === null) return "none";
+
   if (input.intent === "affirmative" && input.state === "pitched") {
     return "createCheckoutOrder";
   }
@@ -138,8 +157,18 @@ function deterministicTool(input: {
 export async function runAgentTurn(input: {
   user: User;
   message: string | null;
+  /**
+   * The notification the person opened, when that is why this turn is running.
+   *
+   * A third kind of turn rather than a synthetic user message. Feeding the model
+   * words we wrote as though the person had typed them would put invented
+   * quotes in the one column of the audit trail that promises to be verbatim,
+   * and would run consent classification over our own sentence.
+   */
+  explain?: { kind: string; body: string } | null;
 }): Promise<AgentTurnResult> {
   const { user, message } = input;
+  const explain = input.explain ?? null;
   const conversation = await getOrCreateConversation(user.id);
   const facts = await computeUsageFacts(user);
 
@@ -249,6 +278,11 @@ export async function runAgentTurn(input: {
     // A no ends it here. No model call, nothing to decide.
     if (intent === "negative") {
       await setConversationState(conversation.id, "declined");
+      // ...and the offer goes off the bell with it. Leaving it lit would make
+      // the notification channel into the nagging the decline rule exists to
+      // prevent — the person would refuse in the chat and still be carrying an
+      // unread pitch. Cap warnings survive: those are about their account.
+      await dismissUpgradeNotifications(user.id).catch(() => {});
       const reply = declineTemplate();
       await logAgentEvent({
         userId: user.id,
@@ -272,8 +306,15 @@ export async function runAgentTurn(input: {
     }
   }
 
-  // Nothing honest to pitch: say so rather than manufacturing a reason.
-  if (message === null && !hasUpgradeCase(facts)) {
+  /**
+   * Nothing honest to pitch: say so rather than manufacturing a reason.
+   *
+   * Only reachable by a malformed call now that the agent never opens a
+   * conversation on its own. An explain turn is excluded deliberately — it has
+   * a subject already, and answering "nothing to flag" to somebody who just
+   * tapped a notification about their cap would be absurd.
+   */
+  if (message === null && !explain && !hasUpgradeCase(facts)) {
     const reply =
       user.plan === "pro"
         ? `You are on Pro, so there is no cap on your ${facts.monthLabel} transactions and recurring charges are detected automatically. Ask me anything about your spending.`
@@ -310,6 +351,7 @@ export async function runAgentTurn(input: {
       message,
       intent,
       conversationState: conversation.state,
+      explain,
     }),
   );
 
@@ -327,6 +369,7 @@ export async function runAgentTurn(input: {
       intent,
       state: conversation.state,
       facts,
+      explain,
     });
   }
 
@@ -364,6 +407,21 @@ export async function runAgentTurn(input: {
   const topic = classifyTopic(message, intent, facts);
 
   const fallbackAnswer = () => {
+    /**
+     * An explanation falls back to the thing being explained.
+     *
+     * It used to fall through to the account summary, which ends by offering
+     * the upgrade — so tapping a notification about a repeating charge produced
+     * a sales pitch about something else. That is the exact behaviour the bell
+     * exists to remove, reintroduced one layer down.
+     *
+     * The body is a safe floor precisely because it has already been through
+     * `checkGrounding` and `checkClaims` on the way out of the store. The
+     * upgrade notice is the exception: `explainSuggestion` runs for that one and
+     * replaces this with the suggestion wording, which is what records the pitch.
+     */
+    if (explain && explain.kind !== "upgrade_available") return explain.body;
+
     if (topic === "greeting") return greetingTemplate(facts);
     if (topic === "off_topic") return offTopicTemplate();
 
@@ -471,6 +529,19 @@ export async function runAgentTurn(input: {
    * the model chooses the words, not which facts survive.
    */
   const price = formatPaise(facts.proPricePaise);
+
+  /**
+   * An explanation of anything other than the offer may not quote the price.
+   *
+   * The person tapped a fact about their own account. A model that answers it
+   * by naming what Pro costs has turned an explanation into a pitch, and — worse
+   * — quoting the price is what marks the upgrade as explained, so a curiosity
+   * click would leave a later yes purchasable. Mechanical, and visible to a
+   * mutation: delete this and the check below stops discarding anything.
+   */
+  if (explain && explain.kind !== "upgrade_available" && modelReply?.includes(price)) {
+    modelReply = null;
+  }
   const mustQuotePrice =
     user.plan === "free" && conversation.state !== "declined";
 

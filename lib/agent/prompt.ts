@@ -5,6 +5,9 @@ import { formatPaise } from "@/lib/money";
 import { neutraliseUserText } from "./grounding";
 import type { Intent } from "./intent";
 
+/** Line break, named so the nested prompt block below stays readable. */
+const NEWLINE = "\n";
+
 /**
  * The prompt, layer 2.
  *
@@ -132,6 +135,8 @@ export function buildUserPrompt(input: {
   message: string | null;
   intent: Intent | null;
   conversationState: string;
+  /** Set when the person opened a notification rather than typing. */
+  explain?: { kind: string; body: string } | null;
 }): string {
   return [
     "FACTS (the only numbers you may use):",
@@ -147,7 +152,21 @@ export function buildUserPrompt(input: {
     "",
     input.message
       ? `USER'S LATEST MESSAGE: ${neutraliseUserText(input.message)}`
-      : "There is no user message yet. Open the conversation by explaining what you noticed in their data and asking whether they want the upgrade set up.",
+      : input.explain
+        ? [
+            "EXPLAINING A NOTIFICATION — the person tapped this, they did not type.",
+            `kind: ${input.explain.kind}`,
+            `shown to them as: "${neutraliseUserText(input.explain.body)}"`,
+            "",
+            "Explain that one thing in more depth, using only the numbers in FACTS.",
+            "Say what it means for them and what happens next. Do not raise anything",
+            "else and do not open a second subject.",
+          ].join(NEWLINE)
+        : // The honest floor for a turn with nothing in it. The agent used to
+          // open here with an unprompted pitch; there is no longer any such
+          // thing as a turn the agent starts, so this is only reachable by a
+          // malformed call and it must not invent a reason to speak.
+          "There is no user message and nothing to explain. Say in one sentence that you can answer questions about their spending, and stop.",
   ]
     .filter(Boolean)
     .join("\n");

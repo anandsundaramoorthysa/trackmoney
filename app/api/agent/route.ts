@@ -8,6 +8,8 @@ import { db } from "@/lib/db";
 import { payments } from "@/lib/db/schema";
 import { RAZORPAY_CURRENCY, razorpayCredentials } from "@/lib/razorpay";
 import { getOrCreateConversation } from "@/lib/agent/conversation";
+import { claimForExplanation, renderOne } from "@/lib/notifications/store";
+import { logAgentEvent } from "@/lib/audit";
 import { runAgentTurn } from "@/lib/agent/run";
 import { getAuthenticatedUser } from "@/lib/auth/session";
 
@@ -95,34 +97,86 @@ async function handleGET() {
 async function handlePOST(request: Request) {
   const user = await getAuthenticatedUser();
 
-  let body: { kind?: string; message?: string };
+  let body: { kind?: string; message?: string; notificationId?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  // Note what this route does NOT accept: a user id. The account is resolved
-  // server-side, so no caller can aim the agent at someone else.
-  if (body.kind === "start") {
-    const conversation = await getOrCreateConversation(user.id);
-    const existing = await listConversationEvents(conversation.id);
+  /**
+   * Note what this route does NOT accept: a user id. The account is resolved
+   * server-side, so no caller can aim the agent at someone else. That property
+   * matters more now than it did — `notificationId` is a caller-supplied
+   * identifier, and it is scoped to the session's own account before it is used
+   * for anything.
+   *
+   * The "start" kind is gone. There is no longer any such thing as a turn the
+   * agent begins: it used to open every conversation with a pitch nobody asked
+   * for, which is the whole reason the bell exists.
+   */
+  if (body.kind === "explain") {
+    const notificationId =
+      typeof body.notificationId === "string" ? body.notificationId : "";
+    if (!notificationId) {
+      return NextResponse.json(
+        { error: "notificationId is required." },
+        { status: 400 },
+      );
+    }
 
-    // The conversation already has history — another tab opened it, or a write
-    // landed between this client's history fetch and this call. Hand back what
-    // is on the record rather than a bare "skipped", which left the panel
-    // permanently blank for whichever client lost the race.
-    if (existing.length > 0) {
+    const { row, alreadyExplained } = await claimForExplanation(
+      user,
+      notificationId,
+    );
+
+    // Not this account's row, or no such row. The same answer either way, so
+    // the endpoint cannot be used to find out which ids exist.
+    if (!row) {
+      return NextResponse.json(
+        { error: "No such notification." },
+        { status: 404 },
+      );
+    }
+
+    const conversation = await getOrCreateConversation(user.id);
+
+    // A refresh, a second tab, or React re-mounting in development. The
+    // explanation already happened and must not happen twice — the upgrade one
+    // records a pitch, and recording it twice would put two suggestions in the
+    // trail for one thing the person opened once.
+    if (alreadyExplained) {
       return NextResponse.json({
         skipped: true,
-        reason: "already_started",
+        reason: "already_explained",
         conversationId: conversation.id,
-        messages: toChatMessages(existing),
+        messages: toChatMessages(await listConversationEvents(conversation.id)),
       });
     }
 
-    const result = await runAgentTurn({ user, message: null });
-    return NextResponse.json(result);
+    const { rendered } = await renderOne(user, row);
+    if (!rendered) {
+      return NextResponse.json(
+        { error: "That notification is no longer available." },
+        { status: 410 },
+      );
+    }
+
+    await logAgentEvent({
+      userId: user.id,
+      conversationId: conversation.id,
+      type: "notification_opened",
+      explanation: `The user opened the notification "${rendered.title}".`,
+      meta: { kind: row.kind, notificationId: row.id },
+    });
+
+    const result = await runAgentTurn({
+      user,
+      message: null,
+      explain: { kind: row.kind, body: rendered.body },
+    });
+
+    return NextResponse.json({ ...result, explaining: { id: row.id, title: rendered.title } });
   }
 
   const message = typeof body.message === "string" ? body.message.trim() : "";

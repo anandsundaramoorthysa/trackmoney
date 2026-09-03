@@ -147,7 +147,8 @@ export type AgentEventType =
   | "intent"
   | "checkout_created"
   | "checkout_result"
-  | "tool_refused";
+  | "tool_refused"
+  | "notification_opened";
 
 /**
  * The audit trail. One row per thing the agent did or was stopped from doing.
@@ -387,3 +388,83 @@ export type PlanConfig = typeof planConfig.$inferSelect;
 export type Conversation = typeof conversations.$inferSelect;
 export type AgentEvent = typeof agentEvents.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
+
+/**
+ * The bell.
+ *
+ * The agent used to open the assistant page by announcing what it had noticed,
+ * which turned a question-and-answer surface into a pitch nobody asked for.
+ * What it noticed is still worth saying; it belongs somewhere the person chose
+ * to look. These rows are that somewhere.
+ *
+ * NOTE WHAT IS NOT HERE: there is no title and no body column. The text is
+ * rendered from `facts` by a pure function every time it is read, so a stored
+ * sentence cannot drift away from the numbers it claims to describe — there is
+ * nowhere to put a sentence, so there is nothing to drift. The snapshot is
+ * frozen at the moment of noticing, which is also what keeps the wording stable
+ * between two glances at the same row.
+ *
+ * `explainedAt` is separate from `readAt` and the difference is load-bearing.
+ * Glancing at a list is not the same as being told something, and for the
+ * upgrade notice this timestamp is what pairs with the conversation reaching
+ * "pitched". Conflating the two would let a badge going quiet stand as proof
+ * that somebody had the upgrade explained to them.
+ */
+export type NotificationKind =
+  | "upgrade_available"
+  | "cap_near"
+  | "cap_reached"
+  | "new_recurring";
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** The conversation the pitch belongs to, so a decline can silence it. */
+    conversationId: uuid("conversation_id").references(() => conversations.id, {
+      onDelete: "cascade",
+    }),
+    kind: text("kind").$type<NotificationKind>().notNull(),
+    /**
+     * What was noticed, as the facts stood at the time. The body is rendered
+     * from this and nothing else.
+     */
+    facts: jsonb("facts").$type<Record<string, unknown> | null>(),
+    /**
+     * kind plus the thing it is about — a month for the cap notices, the
+     * subscription itself for a recurring one.
+     *
+     * The month is deliberately absent from a recurring key. That single
+     * omission is the whole answer to "how do you stop the same insight firing
+     * every month": a charge that repeats is news once, not every thirty days.
+     */
+    dedupKey: text("dedup_key").notNull(),
+    /** Seen in the list. Controls the badge and nothing else. */
+    readAt: timestamp("read_at", { withTimezone: true }),
+    /** Opened, and actually explained in the chat. */
+    explainedAt: timestamp("explained_at", { withTimezone: true }),
+    /** Withdrawn before it was read — how a decline silences a pending pitch. */
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    /**
+     * One row per thing noticed, enforced by the database rather than by
+     * whichever code path remembered to check.
+     *
+     * Notifications are generated on read, so two tabs polling at the same
+     * moment are two writers racing. This is the same answer the payments and
+     * transactions tables already use for the same problem: a rule the database
+     * keeps cannot be bypassed by a second caller that forgets to ask.
+     */
+    unique("notifications_user_dedup_key").on(table.userId, table.dedupKey),
+    index("notifications_user_created_idx").on(table.userId, table.createdAt),
+  ],
+);
+
+export type Notification = typeof notifications.$inferSelect;

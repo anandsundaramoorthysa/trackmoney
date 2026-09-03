@@ -1,6 +1,8 @@
 import Link from "next/link";
 
 import { Logo } from "@/components/brand/Logo";
+import { NotificationBell } from "@/components/NotificationBell";
+import { listNotifications } from "@/lib/notifications/store";
 import { signOutAction } from "@/lib/auth/actions";
 import type { User } from "@/lib/db/schema";
 
@@ -32,14 +34,29 @@ const NAV = [
   { href: "/agent-activity", label: "Agent activity", icon: TrailIcon },
 ];
 
-export function Sidebar({ user }: { user: User }) {
+/**
+ * Still a server component, and the bell does not change that.
+ *
+ * The list is fetched here and handed down as props, so the count is right in
+ * the first paint rather than appearing a moment later — which is the property
+ * the comment above says this file exists to keep. Only the popover itself is
+ * client-side, and it talks to the server just when somebody interacts.
+ */
+export async function Sidebar({ user }: { user: User }) {
+  // A bell that cannot load is not a reason to fail the whole shell.
+  const { items, unread } = await listNotifications(user).catch(() => ({
+    items: [],
+    unread: 0,
+  }));
+
   return (
     <aside className="border-b border-line bg-surface md:fixed md:inset-y-0 md:left-0 md:z-30 md:w-60 md:border-b-0 md:border-r">
       <div className="flex h-full flex-col">
-        <div className="px-5 py-4">
+        <div className="flex items-center justify-between gap-2 px-5 py-4">
           <Link href="/">
             <Logo />
           </Link>
+          <NotificationBell initialItems={items} initialUnread={unread} />
         </div>
 
         <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-1 md:flex-col md:overflow-visible md:pb-0">
