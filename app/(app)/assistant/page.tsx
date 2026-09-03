@@ -28,11 +28,19 @@ export default async function AssistantPage({
           <h1 className="text-2xl font-semibold tracking-[-0.02em]">
             Assistant
           </h1>
+          {/*
+            Four lines of this on a phone is four lines the conversation does
+            not get. The limit that matters is kept at every width; the rest is
+            for a screen with room to spare.
+          */}
           <p className="mt-1 text-sm text-muted">
-            Ask about the month you see on the dashboard, or say what you spent
-            and it will draft it for you to confirm. It cannot open a checkout
-            or take a payment — you do both. Everything it does is logged on the
-            Agent activity page.
+            It cannot open a checkout or take a payment — you do both.
+            <span className="hidden sm:inline">
+              {" "}
+              Ask about the month you see on the dashboard, or say what you
+              spent and it will draft it for you to confirm. Everything it does
+              is logged on the Agent activity page.
+            </span>
           </p>
         </div>
 

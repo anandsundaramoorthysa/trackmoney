@@ -86,7 +86,7 @@ export default async function AgentActivityPage() {
 
                 {(event.facts || event.meta) && (
                   <details className="mt-2 group">
-                    <summary className="cursor-pointer list-none font-mono text-[11px] text-muted underline-offset-2 hover:underline">
+                    <summary className="inline-flex min-h-6 cursor-pointer list-none items-center font-mono text-[11px] text-muted underline-offset-2 hover:underline">
                       show the data behind this row
                     </summary>
                     <div className="mt-2 grid gap-2 md:grid-cols-2">
@@ -139,9 +139,9 @@ function Tally({
 const BADGE_STYLES: Record<AgentEventType, string> = {
   suggestion: "bg-agent-tint text-agent",
   agent_reply: "bg-agent-tint text-agent",
-  user_reply: "bg-brand-tint text-brand",
-  intent: "bg-brand-tint text-brand",
-  checkout_created: "bg-brand-tint text-brand",
+  user_reply: "bg-brand-tint text-brand-strong",
+  intent: "bg-brand-tint text-brand-strong",
+  checkout_created: "bg-brand-tint text-brand-strong",
   checkout_result: "bg-brand-tint text-ok",
   tool_refused: "bg-agent-tint text-bad",
   notification_opened: "bg-agent-tint text-agent",

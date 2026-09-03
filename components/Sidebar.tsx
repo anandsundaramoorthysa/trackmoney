@@ -1,6 +1,8 @@
 import Link from "next/link";
 
 import { Logo } from "@/components/brand/Logo";
+import { MobileNav } from "@/components/MobileNav";
+import { NAV } from "@/components/nav-items";
 import { NotificationBell } from "@/components/NotificationBell";
 import { listNotifications } from "@/lib/notifications/store";
 import { signOutAction } from "@/lib/auth/actions";
@@ -9,38 +11,28 @@ import type { User } from "@/lib/db/schema";
 /**
  * The signed-in shell
  *
- * Navigation lives on the left because the app now has more than three
+ * Navigation lives on the left because the app has more than three
  * destinations and will grow again; a top bar stops scaling at about that
- * point. Rendered on the server, so there is no client state and no
- * hydration gap before it becomes usable.
- *
- * On small screens it becomes a horizontal strip above the content rather than
- * a drawer: six links do not justify a hidden menu, and anything hidden
- * behind a tap is something a reviewer might not find.
+ * point. Rendered on the server, so there is no client state and no hydration
+ * gap before it becomes usable.
  *
  * From md up it is taken out of the flow entirely and pinned to the viewport,
  * so the nav and the account footer stay reachable however far down a long
- * ledger someone has scrolled. The offset that keeps the content clear of it
+ * ledger somebody has scrolled. The offset that keeps the content clear of it
  * lives in the layout.
- */
-
-const NAV = [
-  { href: "/", label: "Dashboard", icon: GridIcon },
-  { href: "/assistant", label: "Assistant", icon: ChatIcon },
-  { href: "/transactions", label: "Transactions", icon: ListIcon },
-  { href: "/insights", label: "Insights", icon: ChartIcon },
-  { href: "/rules", label: "Category rules", icon: TagIcon },
-  { href: "/billing", label: "Billing", icon: CardIcon },
-  { href: "/agent-activity", label: "Agent activity", icon: TrailIcon },
-];
-
-/**
- * Still a server component, and the bell does not change that.
  *
- * The list is fetched here and handed down as props, so the count is right in
- * the first paint rather than appearing a moment later — which is the property
- * the comment above says this file exists to keep. Only the popover itself is
- * client-side, and it talks to the server just when somebody interacts.
+ * Below md it is a slim bar — a menu button, the logo, the bell — and the
+ * destinations move into a drawer. This file used to argue the opposite, that
+ * "six links do not justify a hidden menu, and anything hidden behind a tap is
+ * something a reviewer might not find". Measuring it answered the other way:
+ * the strip put two of seven destinations on screen at 375px and gave no hint
+ * that five more existed. The old reasoning was right about the risk and wrong
+ * about which layout carried it — see components/MobileNav.tsx.
+ *
+ * The bell is fetched here and handed down as props, so the count is correct
+ * in the first paint rather than arriving a moment later. Only the popover and
+ * the drawer are client-side, and both talk to the server just when somebody
+ * interacts.
  */
 export async function Sidebar({ user }: { user: User }) {
   // A bell that cannot load is not a reason to fail the whole shell.
@@ -50,16 +42,26 @@ export async function Sidebar({ user }: { user: User }) {
   }));
 
   return (
-    <aside className="border-b border-line bg-surface md:fixed md:inset-y-0 md:left-0 md:z-30 md:w-60 md:border-b-0 md:border-r">
+    <aside className="sticky top-0 z-40 border-b border-line bg-surface md:fixed md:inset-y-0 md:left-0 md:z-30 md:w-60 md:border-b-0 md:border-r">
       <div className="flex h-full flex-col">
-        <div className="flex items-center justify-between gap-2 px-5 py-4">
+        <div className="flex items-center gap-2 px-4 py-2.5 md:px-5 md:py-4">
+          <MobileNav
+            user={{ name: user.name, email: user.email, plan: user.plan }}
+          />
           <Link href="/">
             <Logo />
           </Link>
-          <NotificationBell initialItems={items} initialUnread={unread} />
+          <div className="ml-auto">
+            <NotificationBell initialItems={items} initialUnread={unread} />
+          </div>
         </div>
 
-        <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-1 md:flex-col md:overflow-visible md:pb-0">
+        {/*
+          The list itself is desktop-only now. On a phone the same array is
+          rendered by the drawer, from components/nav-items.tsx, so a
+          destination cannot exist on one and not the other.
+        */}
+        <nav className="hidden md:flex md:flex-1 md:flex-col md:gap-1 md:px-3">
           {NAV.map((item) => (
             <Link
               key={item.href}
@@ -79,7 +81,7 @@ export async function Sidebar({ user }: { user: User }) {
             <span
               className={`mt-1.5 inline-block rounded-full px-2 py-0.5 text-[11px] ${
                 user.plan === "pro"
-                  ? "bg-brand-tint text-brand"
+                  ? "bg-brand-tint text-brand-strong"
                   : "bg-canvas text-muted"
               }`}
             >
@@ -97,91 +99,5 @@ export async function Sidebar({ user }: { user: User }) {
         </div>
       </div>
     </aside>
-  );
-}
-
-function TagIcon() {
-  return base(
-    <>
-      <path d="M3 7.5V3h4.5L14 9.5 9.5 14Z" />
-      <circle cx="5.6" cy="5.6" r="1" />
-    </>,
-  );
-}
-
-/* Inline icons — six small shapes are not worth an icon dependency. */
-
-function base(children: React.ReactNode) {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      className="shrink-0"
-    >
-      {children}
-    </svg>
-  );
-}
-
-function GridIcon() {
-  return base(
-    <>
-      <rect x="2" y="2" width="5" height="5" rx="1" />
-      <rect x="9" y="2" width="5" height="5" rx="1" />
-      <rect x="2" y="9" width="5" height="5" rx="1" />
-      <rect x="9" y="9" width="5" height="5" rx="1" />
-    </>,
-  );
-}
-
-function ChatIcon() {
-  return base(
-    <>
-      <rect x="2" y="2.5" width="12" height="9" rx="2" />
-      <path d="M5.5 11.5V14L8.5 11.5" />
-      <path d="M5 5.75h6M5 8.25h4" />
-    </>,
-  );
-}
-
-function ListIcon() {
-  return base(
-    <>
-      <path d="M5 4h9M5 8h9M5 12h9" />
-      <path d="M2 4h.01M2 8h.01M2 12h.01" />
-    </>,
-  );
-}
-
-function ChartIcon() {
-  return base(
-    <>
-      <path d="M2 13V7M6 13V3M10 13v-4M14 13V5" />
-    </>,
-  );
-}
-
-function CardIcon() {
-  return base(
-    <>
-      <rect x="1.5" y="3.5" width="13" height="9" rx="1.5" />
-      <path d="M1.5 6.5h13" />
-    </>,
-  );
-}
-
-function TrailIcon() {
-  return base(
-    <>
-      <path d="M3 12.5 7 8l3 2.5L13.5 4" />
-      <circle cx="10" cy="10.5" r="1.6" />
-    </>,
   );
 }

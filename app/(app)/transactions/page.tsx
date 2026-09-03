@@ -90,7 +90,17 @@ export default async function TransactionsPage({
             ` · ${facts.remainingOnFree} of ${facts.freeTxnCap} left on Free`}
         </p>
         </div>
-        <div className="flex items-center gap-3">
+        {/*
+          Wraps, because it did not.
+
+          The month arrows and the two CSV buttons came to 385px against a
+          375px phone, and with nothing allowed to wrap the excess pushed the
+          document wider than the viewport — so the entire page scrolled
+          sideways and "Export CSV" was clipped at the edge. Wrapping puts the
+          buttons on their own line instead; min-w-0 stops the month control
+          refusing to shrink and reinstating the same overflow.
+        */}
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <MonthNav
             month={shownMonth}
             currentMonth={currentMonth}

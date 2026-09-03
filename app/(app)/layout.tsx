@@ -23,12 +23,25 @@ export default async function AppLayout({
       <Sidebar user={user} />
 
       <div className="flex min-w-0 flex-1 flex-col md:pl-60">
-        <p className="border-b border-line bg-agent-tint px-5 py-2 text-xs text-muted">
-          Demo for the Razorpay AI Buildathon. Razorpay runs in test mode and no
-          real money moves — please do not enter real financial data.
+        {/*
+          One line on a phone, the full sentence from sm up.
+
+          It wrapped to three lines at 375px, which with the old nav strip put
+          197px of fixed furniture above every page before any content. The
+          warning that matters — test mode, no real money — is the part kept at
+          every width; the rest is context a small screen can do without.
+        */}
+        <p className="border-b border-line bg-agent-tint px-4 py-2 text-xs text-muted sm:px-5">
+          <span className="sm:hidden">
+            Demo — Razorpay is in test mode. Do not enter real financial data.
+          </span>
+          <span className="hidden sm:inline">
+            Demo for the Razorpay AI Buildathon. Razorpay runs in test mode and
+            no real money moves — please do not enter real financial data.
+          </span>
         </p>
 
-        <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-5 sm:py-8">
           {children}
         </main>
       </div>
