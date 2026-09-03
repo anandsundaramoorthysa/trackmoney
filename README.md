@@ -38,7 +38,7 @@ Razorpay AI Buildathon · Track 1: AI Growth &amp; Agentic Commerce
 - [Test cards](#test-cards)
 - [Walkthrough](#walkthrough)
 - [Demo-day resilience](#demo-day-resilience)
-- [Architecture](#architecture)
+- [Architecture](#architecture)  ·  [ARCHITECTURE.md](ARCHITECTURE.md)
 - [Scope, stated honestly](#scope-stated-honestly)
 - [Repo map](#repo-map)
 - [Contribution](#contribution)
@@ -344,6 +344,11 @@ Tailwind 4, Razorpay Orders API + Checkout.js, Groq with a Gemini fallback.
 The same merchant is reachable over **MCP** as over HTTP, through one shared gate
 — two transports, one implementation, because two copies of a rule is one rule
 and one liability.
+
+> **[ARCHITECTURE.md](ARCHITECTURE.md)** goes further: the whole system, one
+> turn of the agent drawn step by step, the three routes to a purchase, and a
+> table of what each bound is enforced by — and, as importantly, what it is
+> *not* enforced by.
 
 ## Scope, stated honestly
 
