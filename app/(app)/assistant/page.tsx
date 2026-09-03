@@ -23,8 +23,18 @@ export default async function AssistantPage({
     const { explain } = await searchParams;
 
     return (
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
-        <div>
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 sm:gap-5">
+        {/*
+          The heading gets out of the way when there is no height to spare.
+
+          A landscape phone is 375px tall, and so is a portrait one with the
+          keyboard open — which is the state somebody is in precisely when they
+          are typing to the assistant. On those, a title and a paragraph
+          explaining the page cost more than they are worth: what is needed is
+          the conversation and the box to type in. The heading stays for screen
+          readers either way, since it is what names the page.
+        */}
+        <div className="[@media(max-height:520px)]:sr-only">
           <h1 className="text-2xl font-semibold tracking-[-0.02em]">
             Assistant
           </h1>
