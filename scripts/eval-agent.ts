@@ -7,6 +7,7 @@ import { classifyIntent } from "@/lib/agent/intent";
 import { classifyTopic } from "@/lib/agent/answers";
 import { isToolName } from "@/lib/agent/tools";
 import { readProposal } from "@/lib/agent/proposal";
+import { LOOPABLE, MAX_STEPS, mayTakeAnotherStep } from "@/lib/agent/steps";
 import type { UsageFacts } from "@/lib/facts";
 
 /**
@@ -529,6 +530,71 @@ function main() {
     }
   }
   console.log(`  ${topics.length - topicFails}/${topics.length} routed correctly`);
+
+  /* --- the step loop, which is the newest thing that could be abused ---- */
+  console.log();
+  console.log("STEP LOOP");
+
+  let loopFails = 0;
+  const loopCases: Array<[string, boolean, boolean]> = [
+    // [what it is, may it take another step, what it must be]
+    [
+      "a refused draft may be retried",
+      mayTakeAnotherStep({ stepsTaken: 1, tool: "proposeTransaction", lastOutcome: "refused" }),
+      true,
+    ],
+    [
+      "a draft that worked ends the turn",
+      mayTakeAnotherStep({ stepsTaken: 1, tool: "proposeTransaction", lastOutcome: "ran" }),
+      false,
+    ],
+    [
+      "the budget is spent, not negotiable",
+      mayTakeAnotherStep({ stepsTaken: MAX_STEPS, tool: "proposeTransaction", lastOutcome: "refused" }),
+      false,
+    ],
+    [
+      "a refused checkout is never retried",
+      mayTakeAnotherStep({ stepsTaken: 1, tool: "createCheckoutOrder", lastOutcome: "refused" }),
+      false,
+    ],
+    [
+      "a refused pitch is never retried",
+      mayTakeAnotherStep({ stepsTaken: 1, tool: "explainSuggestion", lastOutcome: "refused" }),
+      false,
+    ],
+    [
+      "an invented tool name earns no second attempt",
+      mayTakeAnotherStep({ stepsTaken: 1, tool: "unknown", lastOutcome: "refused" }),
+      false,
+    ],
+    [
+      "no tool at all earns no second attempt",
+      mayTakeAnotherStep({ stepsTaken: 1, tool: "none", lastOutcome: "refused" }),
+      false,
+    ],
+  ];
+
+  for (const [what, got, want] of loopCases) {
+    if (got !== want) {
+      loopFails++;
+      failures++;
+      console.log(`  FAIL  ${what}: got ${got}, wanted ${want}`);
+    }
+  }
+
+  // The set itself, because the whole safety argument rests on what is in it.
+  if (LOOPABLE.size !== 1 || !LOOPABLE.has("proposeTransaction")) {
+    loopFails++;
+    failures++;
+    console.log(
+      `  FAIL  a tool other than drafting became loopable: ${[...LOOPABLE].join(", ")}`,
+    );
+  }
+
+  console.log(`  ${loopCases.length + 1 - loopFails}/${loopCases.length + 1} bounded correctly`);
+  console.log(`  step budget          ${MAX_STEPS}`);
+  console.log(`  loopable tools       ${[...LOOPABLE].join(", ")}`);
 
   /* --- limits, said out loud -------------------------------------------- */
   if (gaps.length) {

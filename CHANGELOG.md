@@ -10,6 +10,11 @@ Dates are the day the work landed on `main`.
 
 ### Added
 
+- A bounded step loop. A turn may now take a second attempt, but only after a
+  refused draft, and only for drafting: `LOOPABLE` has one member, so no amount
+  of iterating reaches a money action. A model that answers a draft refusal by
+  asking for the checkout is refused by name and the loop ends. The budget is
+  spent rather than checked, so no phrasing earns another turn.
 - `npm run eval:agent`, which measures the gates rather than only asserting
   them: a fixed corpus of generations and adversarial inputs through the same
   functions that judge a real reply, reporting how much was shipped, what each

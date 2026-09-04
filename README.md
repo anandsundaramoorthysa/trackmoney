@@ -116,6 +116,7 @@ tomorrow.
 | One yes, one order | `lib/agent/conversation.ts` | Consent is spent when an order is created, so a failed payment cannot be silently retried |
 | Already on Pro | `lib/razorpay.ts` | Charging someone twice |
 | No tools on an explanation | `lib/agent/run.ts` | Opening a notification about your own data cannot become a sale |
+| Only drafting may be retried | `lib/agent/steps.ts` | A turn that iterates cannot iterate its way to a money action |
 
 Two of those live in `createProUpgradeOrder()` rather than in the agent, because
 they apply to human callers too.
@@ -250,6 +251,30 @@ has paid not being charged again, one account never reaching another's data — 
 check was confirmed by deliberately breaking the code and watching the right
 assertion fail. **A test that cannot fail is worse than no test, because it is
 believed.**
+
+### Taking more than one step
+
+A turn is normally one model call and at most one tool. It may take a second
+step in exactly one situation: a draft came back unreadable, and the model is
+given the refusal and one more attempt. Plan, act, observe.
+
+A loop around an agent is where a careful system usually stops being careful,
+because every gate now has to hold twice and the model gets a second chance to
+find a phrasing that slips through. Two structural answers rather than two
+instructions, both in [`lib/agent/steps.ts`](lib/agent/steps.ts):
+
+- **Only drafting iterates.** `LOOPABLE` has one member. A turn cannot enter a
+  loop for `createCheckoutOrder` or `explainSuggestion`, so no amount of
+  iterating reaches a money action or spends the single pitch. Drafting is the
+  safe one to repeat because a draft does nothing: it puts a card on screen that
+  a person still has to confirm.
+- **The budget is spent, not checked.** Each attempt decrements a counter the
+  model never sees. There is no phrasing that earns another turn.
+
+If the model answers a draft refusal by asking for the checkout instead, that is
+refused by name — `no_tool_switch_on_retry` — the loop ends, and the attempt is
+on the trail. Consent is untouched by any of it: it is still classified once,
+from the user's own words, before the first step runs.
 
 ## Measuring the gates
 
@@ -428,6 +453,9 @@ All seeded data is fictional.
 | [`lib/recurring.ts`](lib/recurring.ts) | The recurring-charge rule |
 | [`lib/agent/intent.ts`](lib/agent/intent.ts) | Consent classification, no model involved |
 | [`lib/agent/answers.ts`](lib/agent/answers.ts) | Which subject a reply is about, before any model runs |
+| [`lib/agent/steps.ts`](lib/agent/steps.ts) | What a turn may retry, and how often |
+| [`lib/agent/metrics.ts`](lib/agent/metrics.ts) | What the gates did, counted from the trail |
+| [`scripts/eval-agent.ts`](scripts/eval-agent.ts) | The corpus that measures them |
 | [`lib/agent/tools.ts`](lib/agent/tools.ts) | The three tools and their gates |
 | [`lib/agent/grounding.ts`](lib/agent/grounding.ts) | Grounding, claims, and the templates |
 | [`lib/agent/run.ts`](lib/agent/run.ts) | One turn, start to finish |

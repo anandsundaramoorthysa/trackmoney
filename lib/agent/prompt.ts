@@ -137,6 +137,12 @@ export function buildUserPrompt(input: {
   conversationState: string;
   /** Set when the person opened a notification rather than typing. */
   explain?: { kind: string; body: string } | null;
+  /**
+   * Set on a second attempt at the same turn: the refusal the code gave for
+   * the first one, so the model is correcting a specific rejection rather than
+   * guessing at what went wrong.
+   */
+  retry?: string | null;
 }): string {
   return [
     "FACTS (the only numbers you may use):",
@@ -150,6 +156,7 @@ export function buildUserPrompt(input: {
       ? `THE SYSTEM CLASSIFIED THE USER'S LAST MESSAGE AS: ${input.intent}`
       : "",
     "",
+    input.retry ? input.retry : "",
     input.message
       ? `USER'S LATEST MESSAGE: ${neutraliseUserText(input.message)}`
       : input.explain

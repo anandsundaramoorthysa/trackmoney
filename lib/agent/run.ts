@@ -25,6 +25,12 @@ import {
 } from "./grounding";
 import { dismissUpgradeNotifications } from "@/lib/notifications/store";
 import { classifyTopic } from "./answers";
+import {
+  MAX_STEPS,
+  mayTakeAnotherStep,
+  retryInstruction,
+  type StepRecord,
+} from "./steps";
 import { classifyIntent, INTENT_EXPLANATION, type Intent } from "./intent";
 import type { TransactionProposal } from "@/lib/agent/proposal";
 import { callLLM, parseJsonLoosely, type LlmProvider } from "./llm";
@@ -387,6 +393,8 @@ export async function runAgentTurn(input: {
 
   const ctx: ToolContext = { user, conversation, facts };
   let checkout: CheckoutHandoff | null = null;
+  /** Every attempt this turn made, for the trail. Usually one. */
+  const steps: StepRecord[] = [];
   let toolOutcome: AgentTurnResult["toolOutcome"] = "not_requested";
   let proposal: TransactionProposal | null = null;
   /**
@@ -455,7 +463,103 @@ export async function runAgentTurn(input: {
       modelReply = null;
     }
   } else if (requested === "proposeTransaction") {
-    const outcome = await runProposeTransaction(ctx, choice?.draft ?? {});
+    /**
+     * The one place a turn may take more than one step.
+     *
+     * A refused draft used to end the turn, so a person who had said what they
+     * spent perfectly clearly was told the agent could not read it and had to
+     * type it again. Now the refusal goes back to the model and it gets one
+     * more attempt, which is plan, act, observe.
+     *
+     * The budget is spent here rather than checked anywhere the model can
+     * reach, and `mayTakeAnotherStep` refuses to extend a turn for any tool but
+     * this one — so no amount of iterating arrives at a money action. See
+     * lib/agent/steps.ts for why those two properties are structural rather
+     * than instructions.
+     */
+    let outcome = await runProposeTransaction(ctx, choice?.draft ?? {});
+    /**
+     * Held separately because `ToolOutcome` is a union and only the refused
+     * arm carries a message. Reading it off the union would compile only by
+     * asserting a shape that is not always there.
+     */
+    let lastRefusal =
+      outcome.status === "refused" ? outcome.message : "it could not be read";
+
+    steps.push({
+      step: 1,
+      tool: "proposeTransaction",
+      outcome: outcome.status === "ran" ? "ran" : "refused",
+      ...(outcome.status === "ran" ? {} : { rule: outcome.rule ?? "unreadable_draft" }),
+    });
+
+    while (
+      mayTakeAnotherStep({
+        stepsTaken: steps.length,
+        tool: "proposeTransaction",
+        lastOutcome: outcome.status === "ran" ? "ran" : "refused",
+      })
+    ) {
+      const attempt = steps.length + 1;
+
+      const retry = await callLLM(
+        SYSTEM_PROMPT,
+        buildUserPrompt({
+          facts,
+          events,
+          message,
+          intent,
+          conversationState: conversation.state,
+          explain,
+          retry: retryInstruction(lastRefusal, attempt),
+        }),
+      );
+
+      const retryChoice = retry ? parseJsonLoosely<ModelChoice>(retry.text) : null;
+      const retryTool = isToolName(retryChoice?.tool) ? retryChoice.tool : "none";
+
+      /**
+       * A second bite must not become a different bite. The retry exists to
+       * fix a draft; a model that answers it by asking for the checkout is
+       * refused and the loop ends, with the attempt on the record.
+       */
+      if (retryTool !== "proposeTransaction") {
+        await logAgentEvent({
+          userId: user.id,
+          conversationId: conversation.id,
+          type: "tool_refused",
+          explanation: `On a retry the model asked for "${String(retryChoice?.tool ?? "nothing")}" instead of correcting its draft. Only drafting may be retried.`,
+          meta: {
+            rule: "no_tool_switch_on_retry",
+            requested: retryChoice?.tool ?? null,
+            step: attempt,
+            enforcedIn: "lib/agent/run.ts",
+          },
+        });
+        steps.push({
+          step: attempt,
+          tool: retryTool,
+          outcome: "refused",
+          rule: "no_tool_switch_on_retry",
+        });
+        break;
+      }
+
+      outcome = await runProposeTransaction(ctx, retryChoice?.draft ?? {});
+      if (outcome.status === "refused") lastRefusal = outcome.message;
+      steps.push({
+        step: attempt,
+        tool: "proposeTransaction",
+        outcome: outcome.status === "ran" ? "ran" : "refused",
+        ...(outcome.status === "ran"
+          ? {}
+          : { rule: outcome.rule ?? "unreadable_draft" }),
+      });
+
+      // The wording that ships is the wording from the attempt that stuck.
+      if (outcome.status === "ran") modelReply = retryChoice?.reply ?? null;
+    }
+
     if (outcome.status === "ran") {
       toolOutcome = "ran";
       // The card carries the numbers; whatever the model wrote alongside is
@@ -592,6 +696,9 @@ export async function runAgentTurn(input: {
       // What the provider says the turn cost. Absent when no model answered,
       // or when the provider did not report it.
       ...(llm?.usage ? { tokens: llm.usage } : {}),
+      // Only worth recording when the turn actually iterated; a one-step turn
+      // saying "steps: 1" is noise in every row of the trail.
+      ...(steps.length > 1 ? { steps, stepBudget: MAX_STEPS } : {}),
       ...(grounded.offending.length
         ? { ungroundedNumbers: grounded.offending }
         : {}),
