@@ -2,9 +2,7 @@
 
 <img src="public/logo-wordmark.svg" alt="TrackMoney" width="260" />
 
-# TrackMoney
-
-**An expense tracker that sells its own Pro upgrade — and refuses, out loud, to do it badly.**
+**An expense tracker that sells its own Pro upgrade, and refuses out loud to do it badly.**
 
 Razorpay AI Buildathon · Track 1: AI Growth &amp; Agentic Commerce
 
