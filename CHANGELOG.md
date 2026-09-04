@@ -8,7 +8,26 @@ Dates are the day the work landed on `main`.
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- The phone layout, measured rather than assumed. Navigation moved into a drawer
+  after the old strip was found to show two of seven destinations at 375px, and
+  the account and sign-out moved with it: below 768px there had been no way to
+  sign out at all. The assistant's message box is no longer pushed off-screen by
+  a phone keyboard, and no page scrolls sideways at 320px.
+- Three notifications that said the same sentence. One row was emitted per
+  repeating charge, but the body was written for the whole set and on Free it
+  cannot name a merchant, so the same words appeared three times.
+- The build works from the repository rather than only from a machine with the
+  test harness on disk.
+- `.env.example` explained how to escape a PEM key using a real newline, which
+  broke the sentence it was explaining.
+
+### Changed
+
+- The documentation an open-source repository is expected to carry: contributing
+  guide, security policy, code of conduct, issue and pull request templates, and
+  this file. `ARCHITECTURE.md` moved to the root and is published.
 
 ## [1.0.0] — 2026-09-03
 
