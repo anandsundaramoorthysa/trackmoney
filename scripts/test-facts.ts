@@ -687,6 +687,43 @@ test("a refused tool call is not counted as a turn", () => {
   assert.equal(m.turns, 1);
 });
 
+test("a reasoning model's unitemised tokens are named, not dropped", () => {
+  /**
+   * gpt-oss-20b bills for tokens it reports in neither prompt nor completion,
+   * so printing only those two beside the total produced a breakdown that
+   * visibly did not add up: 1,091 in and 11 out under a total of 1,584. On a
+   * page whose whole point is that the numbers reconcile, that is worse than
+   * showing no breakdown at all.
+   */
+  const m = computeAgentMetrics([
+    ev("agent_reply", {
+      provider: "groq",
+      grounding: "grounded",
+      tokens: { prompt: 1091, completion: 11, total: 1584 },
+    }),
+  ]);
+
+  assert.equal(m.tokens?.total, 1584);
+  assert.equal(m.tokens?.unaccounted, 482);
+  assert.equal(
+    (m.tokens?.prompt ?? 0) +
+      (m.tokens?.completion ?? 0) +
+      (m.tokens?.unaccounted ?? 0),
+    m.tokens?.total,
+  );
+});
+
+test("a provider whose figures already add up reports nothing unaccounted", () => {
+  const m = computeAgentMetrics([
+    ev("agent_reply", {
+      provider: "gemini",
+      grounding: "grounded",
+      tokens: { prompt: 900, completion: 100, total: 1000 },
+    }),
+  ]);
+  assert.equal(m.tokens?.unaccounted, 0);
+});
+
 test("discarded figures are collected, deduplicated, for showing", () => {
   const m = computeAgentMetrics([
     ev("agent_reply", {

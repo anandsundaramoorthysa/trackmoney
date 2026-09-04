@@ -136,7 +136,11 @@ export default async function AgentActivityPage() {
                 <Stat
                   label="Tokens spent"
                   value={metrics.tokens.total.toLocaleString("en-IN")}
-                  note={`${metrics.tokens.prompt.toLocaleString("en-IN")} in, ${metrics.tokens.completion.toLocaleString("en-IN")} out`}
+                  note={
+                    metrics.tokens.unaccounted > 0
+                      ? `${metrics.tokens.prompt.toLocaleString("en-IN")} in, ${metrics.tokens.completion.toLocaleString("en-IN")} out, ${metrics.tokens.unaccounted.toLocaleString("en-IN")} the model reasoned with`
+                      : `${metrics.tokens.prompt.toLocaleString("en-IN")} in, ${metrics.tokens.completion.toLocaleString("en-IN")} out`
+                  }
                 />
               )}
             </dl>

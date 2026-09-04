@@ -30,8 +30,20 @@ export type AgentMetrics = {
   /**
    * Tokens the providers reported, summed. Null when none reported any, which
    * is different from zero: zero would claim the turns were free.
+   *
+   * `unaccounted` is the part of the total the provider did not itemise. A
+   * reasoning model bills for tokens it never shows as prompt or completion,
+   * so prompt plus completion is smaller than the total and printing only
+   * those two beside it produces a breakdown that visibly does not add up.
+   * Naming the remainder is better than hiding it or, worse, quietly showing
+   * a total that contradicts its own parts.
    */
-  tokens: { prompt: number; completion: number; total: number } | null;
+  tokens: {
+    prompt: number;
+    completion: number;
+    total: number;
+    unaccounted: number;
+  } | null;
 };
 
 function metaOf(event: AgentEvent): Record<string, unknown> {
@@ -114,7 +126,12 @@ export function computeAgentMetrics(events: AgentEvent[]): AgentMetrics {
       .map(([rule, count]) => ({ rule, count }))
       .sort((a, b) => b.count - a.count),
     ungroundedSamples: [...ungrounded].slice(0, 8),
-    tokens: tokensSeen ? tokens : null,
+    tokens: tokensSeen
+      ? {
+          ...tokens,
+          unaccounted: Math.max(0, tokens.total - tokens.prompt - tokens.completion),
+        }
+      : null,
   };
 }
 
