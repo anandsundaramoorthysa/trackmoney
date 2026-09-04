@@ -199,11 +199,24 @@ const INSTRUCTION_SHAPED =
   /\b(ignore|disregard|forget)\s+(all\s+|any\s+|the\s+)?(previous|prior|above|earlier)\b|\b(system|assistant|developer)\s*:|<\/?(system|instructions?)>|\bnew\s+instructions?\b/gi;
 
 export function neutraliseUserText(value: string): string {
-  return value
-    .replace(INSTRUCTION_SHAPED, "[redacted]")
-    // Line breaks are how a payload pretends to start a fresh turn.
-    .replace(/[\r\n]+/g, " ")
-    .slice(0, 80);
+  return (
+    value
+      .replace(INSTRUCTION_SHAPED, "[redacted]")
+      // Line breaks are how a payload pretends to start a fresh turn.
+      .replace(/[\r\n]+/g, " ")
+      /**
+       * Code fences and angle-bracket tags are the other way a payload draws a
+       * boundary the prompt does not have. A merchant called "Netflix```" was
+       * keeping its fence all the way into the prompt, where three backticks
+       * followed by a role marker reads as the start of a new block. The text
+       * inside stays readable; only the scaffolding goes.
+       */
+      .replace(/[`~]{2,}/g, " ")
+      .replace(/<\/?[a-z][^>]{0,40}>/gi, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim()
+      .slice(0, 80)
+  );
 }
 
 export type ClaimResult = {

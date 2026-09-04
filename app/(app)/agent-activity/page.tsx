@@ -1,5 +1,6 @@
 import { SetupNotice } from "@/components/SetupNotice";
 import { EVENT_LABELS, listAgentEvents } from "@/lib/audit";
+import { computeAgentMetrics, RULE_LABELS } from "@/lib/agent/metrics";
 import type { AgentEventType } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth/guard";
 import { formatTimestamp } from "@/lib/time";
@@ -26,6 +27,7 @@ export default async function AgentActivityPage() {
     const events = truncated ? fetched.slice(0, TRAIL_LIMIT) : fetched;
 
     const refusals = events.filter((e) => e.type === "tool_refused").length;
+    const metrics = computeAgentMetrics(events);
 
     // A reused order and a failed API call are not money actions — one is a
     // deduplicated no-op and the other never reached Razorpay. Counting them
@@ -63,6 +65,116 @@ export default async function AgentActivityPage() {
           <Tally label="Money actions" value={moneyActions} />
           <Tally label="Tool calls refused" value={refusals} tone="agent" />
         </div>
+
+        {/*
+          The same rows, counted.
+
+          A refusal you can scroll past once is an anecdote. A rate is a
+          property of the system, and it is the thing somebody actually wants
+          to know after reading two or three rows: does any of this fire, and
+          how often. Every figure here is derived from the events above rather
+          than recorded separately, so the summary cannot disagree with the
+          trail it summarises.
+        */}
+        {metrics.turns > 0 && (
+          <section
+            aria-label="What the gates did"
+            className="rounded-xl border border-line bg-surface p-4"
+          >
+            <h2 className="text-sm font-semibold">What the gates did</h2>
+            <p className="mt-1 text-xs text-muted">
+              Counted from the rows below, over this account&apos;s whole
+              history.
+            </p>
+
+            <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Stat
+                label="Turns the agent took"
+                value={String(metrics.turns)}
+              />
+              <Stat
+                label="Answered by a model"
+                value={`${metrics.modelAnswered} of ${metrics.turns}`}
+                note={
+                  metrics.byProvider.template > 0
+                    ? `${metrics.byProvider.template} fell through to templates`
+                    : undefined
+                }
+              />
+              <Stat
+                label="Wording discarded as ungrounded"
+                value={
+                  metrics.groundingRejectionRate === null
+                    ? "n/a"
+                    : `${(metrics.groundingRejectionRate * 100).toFixed(1)}%`
+                }
+                note={
+                  metrics.groundingRejectionRate === null
+                    ? "no model has answered yet"
+                    : `${metrics.fellBackToTemplate} of ${metrics.modelAnswered} model replies`
+                }
+                tone={metrics.fellBackToTemplate > 0 ? "agent" : undefined}
+              />
+              {/*
+                Deliberately not repeating the tally above. That one counts
+                refusals; this is the share of attempts that were refused,
+                which is the figure that says whether the gates are load
+                bearing or decorative.
+              */}
+              <Stat
+                label="Refusal rate"
+                value={
+                  metrics.toolsRequested + metrics.toolsRefused > 0
+                    ? `${metrics.toolsRefused} of ${
+                        metrics.toolsRequested + metrics.toolsRefused
+                      }`
+                    : "none attempted"
+                }
+                tone={metrics.toolsRefused > 0 ? "agent" : undefined}
+              />
+              {metrics.tokens && (
+                <Stat
+                  label="Tokens spent"
+                  value={metrics.tokens.total.toLocaleString("en-IN")}
+                  note={`${metrics.tokens.prompt.toLocaleString("en-IN")} in, ${metrics.tokens.completion.toLocaleString("en-IN")} out`}
+                />
+              )}
+            </dl>
+
+            {metrics.refusalsByRule.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-medium text-muted">
+                  Why calls were refused
+                </p>
+                <ul className="mt-1.5 space-y-1">
+                  {metrics.refusalsByRule.map(({ rule, count }) => (
+                    <li key={rule} className="text-xs text-muted">
+                      <span className="font-mono tabular text-ink">
+                        {count}
+                      </span>{" "}
+                      {RULE_LABELS[rule] ?? rule}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {metrics.ungroundedSamples.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-medium text-muted">
+                  Figures the grounding check threw away
+                </p>
+                <p className="mt-1.5 font-mono text-xs text-bad">
+                  {metrics.ungroundedSamples.join("  ·  ")}
+                </p>
+                <p className="mt-1 text-xs text-muted">
+                  Each of these was in a sentence a model wrote, and in none of
+                  the facts it was given. None of them reached the account.
+                </p>
+              </div>
+            )}
+          </section>
+        )}
 
         {events.length === 0 ? (
           <p className="rounded-xl border border-line bg-surface px-4 py-6 text-sm text-muted">
@@ -133,6 +245,32 @@ function Tally({
         {value}
       </span>
     </span>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  note,
+  tone,
+}: {
+  label: string;
+  value: string;
+  note?: string;
+  tone?: "agent";
+}) {
+  return (
+    <div>
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd
+        className={`mt-0.5 font-mono text-lg tabular ${
+          tone === "agent" ? "text-agent" : "text-ink"
+        }`}
+      >
+        {value}
+      </dd>
+      {note && <p className="text-xs text-muted">{note}</p>}
+    </div>
   );
 }
 

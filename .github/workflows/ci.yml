@@ -35,6 +35,9 @@ jobs:
       - name: Unit tests
         run: npm run test:facts
 
+      - name: Evaluate the agent's gates
+        run: npm run eval:agent
+
       - name: Build
         run: npm run build
         env:

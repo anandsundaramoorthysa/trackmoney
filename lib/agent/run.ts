@@ -589,6 +589,9 @@ export async function runAgentTurn(input: {
       toolOutcome,
       grounding: grounded.grounding,
       explainedUpgrade,
+      // What the provider says the turn cost. Absent when no model answered,
+      // or when the provider did not report it.
+      ...(llm?.usage ? { tokens: llm.usage } : {}),
       ...(grounded.offending.length
         ? { ungroundedNumbers: grounded.offending }
         : {}),

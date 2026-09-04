@@ -8,7 +8,28 @@ Dates are the day the work landed on `main`.
 
 ## [Unreleased]
 
+### Added
+
+- `npm run eval:agent`, which measures the gates rather than only asserting
+  them: a fixed corpus of generations and adversarial inputs through the same
+  functions that judge a real reply, reporting how much was shipped, what each
+  gate stopped, and how many attacks were refused. Runs in CI. Two limits are
+  measured and printed rather than hidden.
+- A summary on the activity page counting what the gates did for a real
+  account: turns a model answered, the share of its wording discarded as
+  ungrounded, which rules refused a tool call, the exact figures thrown away,
+  and what the turns cost in tokens. Derived from the rows already on the page,
+  so it cannot disagree with them.
+- Token usage from both providers, recorded per turn in the audit trail. Both
+  reported it and neither was being read.
+
 ### Fixed
+
+- A conditional yes was read as consent. "yes if it is free" matched the
+  affirmative list and stopped there, so somebody setting a condition was
+  recorded as accepting the offer on the table. Found by the new eval.
+- Code fences survived text neutralisation, so a merchant named with a fence
+  kept it all the way into the prompt. Also found by the eval.
 
 - The phone layout, measured rather than assumed. Navigation moved into a drawer
   after the old strip was found to show two of seven destinations at 375px, and

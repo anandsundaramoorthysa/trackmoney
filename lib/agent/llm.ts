@@ -42,12 +42,50 @@ function config() {
 
 export type LlmProvider = "groq" | "gemini" | "template";
 
+/**
+ * What a call cost, when the provider says.
+ *
+ * Both providers report it and neither was being read. On a project about
+ * money actions, the cost of the thing deciding the wording is worth writing
+ * down beside the wording: it goes into the audit trail with everything else,
+ * so a reader can see what a turn cost as well as what it said.
+ *
+ * Optional because it is the provider's word, not ours. A provider that stops
+ * reporting usage should leave the field absent rather than have us invent a
+ * zero, which would read as a free turn.
+ */
+export type TokenUsage = {
+  prompt: number;
+  completion: number;
+  total: number;
+};
+
 export type LlmResult = {
   text: string;
   provider: Exclude<LlmProvider, "template">;
+  usage?: TokenUsage;
 };
 
-async function callGroq(system: string, user: string): Promise<string> {
+/** What one provider call returns before it is labelled with its provider. */
+type Answer = { text: string; usage?: TokenUsage };
+
+function readUsage(
+  prompt: unknown,
+  completion: unknown,
+  total: unknown,
+): TokenUsage | undefined {
+  const p = typeof prompt === "number" ? prompt : undefined;
+  const c = typeof completion === "number" ? completion : undefined;
+  const t = typeof total === "number" ? total : undefined;
+  if (p === undefined && c === undefined && t === undefined) return undefined;
+  return {
+    prompt: p ?? 0,
+    completion: c ?? 0,
+    total: t ?? (p ?? 0) + (c ?? 0),
+  };
+}
+
+async function callGroq(system: string, user: string): Promise<Answer> {
   const key = process.env.GROQ_API_KEY;
   if (!key) throw new Error("GROQ_API_KEY not set");
 
@@ -81,13 +119,25 @@ async function callGroq(system: string, user: string): Promise<string> {
 
   const data = (await response.json()) as {
     choices?: { message?: { content?: string } }[];
+    usage?: {
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      total_tokens?: number;
+    };
   };
   const text = data.choices?.[0]?.message?.content;
   if (!text) throw new Error("Groq returned no content");
-  return text;
+  return {
+    text,
+    usage: readUsage(
+      data.usage?.prompt_tokens,
+      data.usage?.completion_tokens,
+      data.usage?.total_tokens,
+    ),
+  };
 }
 
-async function callGemini(system: string, user: string): Promise<string> {
+async function callGemini(system: string, user: string): Promise<Answer> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY not set");
 
@@ -120,25 +170,41 @@ async function callGemini(system: string, user: string): Promise<string> {
 
   const data = (await response.json()) as {
     candidates?: { content?: { parts?: { text?: string }[] } }[];
+    usageMetadata?: {
+      promptTokenCount?: number;
+      candidatesTokenCount?: number;
+      totalTokenCount?: number;
+    };
   };
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error("Gemini returned no content");
-  return text;
+  return {
+    text,
+    usage: readUsage(
+      data.usageMetadata?.promptTokenCount,
+      data.usageMetadata?.candidatesTokenCount,
+      data.usageMetadata?.totalTokenCount,
+    ),
+  };
 }
 
 export async function callLLM(
   system: string,
   user: string,
 ): Promise<LlmResult | null> {
-  const attempts: { provider: "groq" | "gemini"; fn: () => Promise<string> }[] = [
+  const attempts: { provider: "groq" | "gemini"; fn: () => Promise<Answer> }[] = [
     { provider: "groq", fn: () => callGroq(system, user) },
     { provider: "gemini", fn: () => callGemini(system, user) },
   ];
 
   for (const attempt of attempts) {
     try {
-      const text = await attempt.fn();
-      return { text, provider: attempt.provider };
+      const answer = await attempt.fn();
+      return {
+        text: answer.text,
+        provider: attempt.provider,
+        ...(answer.usage ? { usage: answer.usage } : {}),
+      };
     } catch (error) {
       console.warn(
         `[agent] ${attempt.provider} unavailable, falling through:`,

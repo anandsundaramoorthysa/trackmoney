@@ -6,6 +6,7 @@ import { canonical, generateKeyPairPem, sign, verify } from "@/lib/signing";
 import { neutraliseUserText } from "@/lib/agent/grounding";
 import { classifyIntent } from "@/lib/agent/intent";
 import type { UsageFacts } from "@/lib/facts";
+import { computeAgentMetrics } from "@/lib/agent/metrics";
 import {
   deriveNotifications,
   renderNotification,
@@ -611,6 +612,95 @@ test("a Free notification never names what Pro is selling", () => {
     showsRecurringDetail: true,
   });
   assert.equal(paid.body.includes("Cult.fit"), true, paid.body);
+});
+
+/* ------------------------------------------------------------------ */
+/* Counting what the gates did                                         */
+/* ------------------------------------------------------------------ */
+
+/** Just enough of an event to be counted. */
+function ev(
+  type: string,
+  meta: Record<string, unknown> | null,
+): Parameters<typeof computeAgentMetrics>[0][number] {
+  return {
+    id: Math.random().toString(36).slice(2),
+    conversationId: "c",
+    userId: "u",
+    type: type as never,
+    explanation: "",
+    facts: null,
+    meta,
+    createdAt: new Date(),
+  };
+}
+
+test("the rejection rate is measured against model replies, not all turns", () => {
+  /**
+   * Counting template turns in the denominator would make the rate improve
+   * every time a provider went down, which reads as the checks getting better
+   * exactly when nothing is being checked.
+   */
+  const m = computeAgentMetrics([
+    ev("agent_reply", { provider: "groq", grounding: "grounded" }),
+    ev("agent_reply", { provider: "groq", grounding: "fell_back_to_template" }),
+    ev("agent_reply", { provider: "template", grounding: "template_only" }),
+    ev("agent_reply", { provider: "template", grounding: "template_only" }),
+  ]);
+
+  assert.equal(m.turns, 4);
+  assert.equal(m.modelAnswered, 2);
+  assert.equal(m.fellBackToTemplate, 1);
+  assert.equal(m.groundingRejectionRate, 0.5);
+});
+
+test("with no model replies the rate is absent rather than zero", () => {
+  // Zero would claim every generation passed. None was made.
+  const m = computeAgentMetrics([
+    ev("agent_reply", { provider: "template", grounding: "template_only" }),
+  ]);
+  assert.equal(m.modelAnswered, 0);
+  assert.equal(m.groundingRejectionRate, null);
+});
+
+test("refusals are counted by the rule that stopped them", () => {
+  const m = computeAgentMetrics([
+    ev("tool_refused", { rule: "closed_toolset" }),
+    ev("tool_refused", { rule: "no_recorded_consent" }),
+    ev("tool_refused", { rule: "no_recorded_consent" }),
+    ev("tool_refused", null),
+  ]);
+
+  assert.equal(m.toolsRefused, 4);
+  assert.equal(m.refusalsByRule[0].rule, "no_recorded_consent");
+  assert.equal(m.refusalsByRule[0].count, 2);
+  // A refusal with no rule recorded is still a refusal, and says so.
+  assert.ok(m.refusalsByRule.some((r) => r.rule === "unspecified"));
+});
+
+test("a refused tool call is not counted as a turn", () => {
+  // Otherwise refusing more would look like talking more.
+  const m = computeAgentMetrics([
+    ev("tool_refused", { rule: "closed_toolset" }),
+    ev("agent_reply", { provider: "groq", grounding: "grounded" }),
+  ]);
+  assert.equal(m.turns, 1);
+});
+
+test("discarded figures are collected, deduplicated, for showing", () => {
+  const m = computeAgentMetrics([
+    ev("agent_reply", {
+      provider: "groq",
+      grounding: "fell_back_to_template",
+      ungroundedNumbers: ["47", "1,200"],
+    }),
+    ev("agent_reply", {
+      provider: "groq",
+      grounding: "fell_back_to_template",
+      ungroundedNumbers: ["47"],
+    }),
+  ]);
+  assert.deepEqual(m.ungroundedSamples.sort(), ["1,200", "47"]);
 });
 
 test("a failing route does not describe the database to the caller", async () => {

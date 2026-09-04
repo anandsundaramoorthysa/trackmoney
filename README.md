@@ -33,6 +33,7 @@ Razorpay AI Buildathon · Track 1: AI Growth &amp; Agentic Commerce
   - [One failure handled gracefully](#one-failure-handled-gracefully)
 - [Installation & Run the Project](#installation--run-the-project)
 - [How this was verified](#how-this-was-verified)
+- [Measuring the gates](#measuring-the-gates)
 - [Test cards](#test-cards)
 - [Walkthrough](#walkthrough)
 - [Demo-day resilience](#demo-day-resilience)
@@ -249,6 +250,52 @@ has paid not being charged again, one account never reaching another's data — 
 check was confirmed by deliberately breaking the code and watching the right
 assertion fail. **A test that cannot fail is worse than no test, because it is
 believed.**
+
+## Measuring the gates
+
+Asserting that a gate works and knowing how often it fires are different
+questions, and only the second one survives being asked in an interview.
+
+```bash
+npm run eval:agent
+```
+
+It runs a fixed corpus through the same functions that judge a real generation:
+sentences a model plausibly writes, including the wrong ones, plus adversarial
+inputs a person might type to get past the consent classifier.
+
+```
+GENERATIONS
+  22/22 behaved as specified
+  shipped              10
+  stopped by grounding 8
+  stopped by claims    4
+  rejection rate       54.5%  (12/22)
+
+ADVERSARIAL INPUTS
+  26/26 refused
+  breaches             0
+```
+
+The corpus covers invented figures, the paise-for-rupees confusion, real numbers
+used for the wrong fact, forged consent, conditional consent, hesitation,
+questions containing a negation, prompt injection through both the chat box and
+merchant names, and invented tool names.
+
+**The model is deliberately not called.** This evaluates the defence, not the
+provider: calling Groq would make the numbers depend on which model answered
+that morning, need credentials in CI, and measure something nobody controls. The
+honest limit is stated in the file: it cannot tell you how often a real model
+writes a bad sentence, only what happens to bad sentences when they arrive.
+
+Two gaps are **measured rather than hidden**, and the run prints them: grounding
+reads digits, so a figure spelled out in words is not inspected, and a false
+sentence containing no numbers passes every check here.
+
+It runs in CI on every push, and `/agent-activity` shows the same counts for a
+real account: how many turns a model answered, what share of its wording was
+discarded as ungrounded, which rules refused a tool call, the exact figures the
+grounding check threw away, and what the turns cost in tokens.
 
 ## Test cards
 

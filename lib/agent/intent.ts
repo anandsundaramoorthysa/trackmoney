@@ -104,6 +104,9 @@ const QUESTION_WORDS = [
  * been pitched, and the pitch itself was then spent on somebody who had not
  * asked for it.
  */
+const GREETING =
+  /^(?:hi|hii+|hey|hello|helo|yo|namaste|hola|good\s+(?:morning|afternoon|evening)|greetings)\b[\s!.,]*(?:there|tracky(?:\s+ai)?)?[\s!.,?]*$/;
+
 /**
  * "ok" on its own, meaning "I read that" and not "charge me".
  *
@@ -125,8 +128,20 @@ const QUESTION_WORDS = [
 const ACKNOWLEDGEMENT_ONLY =
   /^(?:ok(?:ay)?|k|kk)\b[\s!.,]*(?:thanks|thank you|thanks a lot|ty|got it|noted|cool|fine|great|nice|sure thing|understood)?[\s!.,]*$/;
 
-const GREETING =
-  /^(?:hi|hii+|hey|hello|helo|yo|namaste|hola|good\s+(?:morning|afternoon|evening)|greetings)\b[\s!.,]*(?:there|tracky(?:\s+ai)?)?[\s!.,?]*$/;
+/**
+ * A yes with a condition attached to it.
+ *
+ * "yes if it is free" is not agreement to pay ₹499; it is agreement to a
+ * different offer that was never made. The affirmative list matched the "yes"
+ * and stopped reading, so a person setting a condition was recorded as having
+ * accepted the one on the table.
+ *
+ * Anything conditional resolves to unclear, which costs a turn of conversation
+ * and asks them to say plainly what they meant. The alternative is charging
+ * somebody for a thing they agreed to only hypothetically.
+ */
+const CONDITIONAL =
+  /\b(if|unless|provided|assuming|as long as|so long as|only if|depending on|in case)\b/;
 
 /**
  * Phrases that carry a refusal word without being a refusal.
@@ -171,6 +186,10 @@ export function classifyIntent(message: string): Intent {
   const saysNo = HARD_NEGATIVE.some((re) => re.test(meaningful));
   const mentionsNot = SOFT_NEGATIVE.some((re) => re.test(meaningful));
   const saysYes = AFFIRMATIVE.some((re) => re.test(meaningful));
+
+  // A yes with a condition on it is not a yes to what was offered. Checked
+  // before the affirmative test, because that test stops at the first match.
+  if (saysYes && CONDITIONAL.test(meaningful)) return "unclear";
 
   // A message carrying both a refusal and an agreement is not evidence of
   // either. Both outcomes here are costly — one charges someone, the other
