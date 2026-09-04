@@ -244,11 +244,22 @@ function PlanCard({
   );
 }
 
-function StatusPill({ status }: { status: "created" | "success" | "failed" }) {
+function StatusPill({
+  status,
+}: {
+  status: "created" | "success" | "failed" | "abandoned";
+}) {
   const styles = {
     created: "bg-brand-tint text-brand-strong",
     success: "bg-brand-tint text-ok",
     failed: "bg-agent-tint text-bad",
+    /*
+      Muted, not red. An abandoned order is one nobody paid and nobody could:
+      it was set aside so a fresh one could be made. Colouring it like a failed
+      payment would tell somebody a payment of theirs failed when none was ever
+      attempted.
+    */
+    abandoned: "bg-canvas text-muted",
   }[status];
 
   return (

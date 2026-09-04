@@ -237,7 +237,17 @@ export async function openCheckout(
         settle({
           outcome: "unavailable",
           reason:
-            "Razorpay's checkout did not open. Nothing was charged — try again, and if it keeps happening the order is still on your billing page.",
+            /**
+             * This can now promise something true.
+             *
+             * Until the order reuse was reconciled, "try again" was hollow
+             * advice: a stuck order was handed back on every attempt, so the
+             * next click failed the same way, forever. The server now checks
+             * an order against Razorpay before reusing it and starts a fresh
+             * one when the old is no longer openable, so a second click really
+             * does clear this.
+             */
+            "Razorpay's checkout did not open, and nothing was charged. Try again: if the order behind it had gone stale, the next attempt starts a fresh one.",
         });
         return;
       }

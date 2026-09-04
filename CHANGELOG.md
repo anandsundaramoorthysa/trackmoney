@@ -30,6 +30,15 @@ Dates are the day the work landed on `main`.
 
 ### Fixed
 
+- An account could be locked out of checkout permanently. Any payment row still
+  marked `created` was reused forever, with no age limit and without ever asking
+  Razorpay whether the order behind it could still be opened, so an order that
+  died on Razorpay's side was handed to Checkout.js on every later attempt: the
+  preferences call answered 400 and nothing could clear it. An open row past the
+  double-click window is now read back from Razorpay first, and set aside if it
+  is no longer openable. An order settled somewhere this server never heard
+  about is recorded as exactly that, and still does not move the plan, because a
+  plan only ever changes on a verified signature.
 - A conditional yes was read as consent. "yes if it is free" matched the
   affirmative list and stopped there, so somebody setting a condition was
   recorded as accepting the offer on the table. Found by the new eval.

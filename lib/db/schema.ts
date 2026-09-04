@@ -297,7 +297,22 @@ export const payments = pgTable(
     razorpayOrderId: text("razorpay_order_id").notNull().unique(),
     razorpayPaymentId: text("razorpay_payment_id"),
     amountPaise: integer("amount_paise").notNull(),
-    status: text("status", { enum: ["created", "success", "failed"] })
+    /**
+     * "abandoned" is not a failed payment and must not be shown as one.
+     *
+     * An order can stop being openable at Razorpay without anybody attempting
+     * a payment: it gets settled on a tab we never heard back from, or it
+     * simply goes stale. Recording that as "failed" would tell somebody their
+     * payment failed when no payment was ever made, and the billing page would
+     * ask them to read a reason for something that did not happen.
+     *
+     * It also has to be a status rather than a deleted row, because
+     * `payments_one_open_order_per_user` only counts rows still marked
+     * "created": moving the dead one aside is what lets a fresh order exist.
+     */
+    status: text("status", {
+      enum: ["created", "success", "failed", "abandoned"],
+    })
       .notNull()
       .default("created"),
     failureReason: text("failure_reason"),

@@ -112,6 +112,7 @@ tomorrow.
 | Exactly three tools exist | `lib/agent/run.ts` | A hallucinated tool name is refused and audited, not ignored |
 | Consent must already be recorded | `lib/agent/tools.ts` | The model cannot assert that you agreed |
 | One open order per user | `lib/razorpay.ts` | A retry loop cannot stack up orders |
+| An open row is checked against Razorpay before it is reused | `lib/razorpay.ts` | A dead order cannot lock an account out of checkout |
 | Hard stop after a decline | `lib/agent/tools.ts`, `lib/agent/run.ts` | No second pitch, no nagging — in every tier, including templates |
 | One yes, one order | `lib/agent/conversation.ts` | Consent is spent when an order is created, so a failed payment cannot be silently retried |
 | Already on Pro | `lib/razorpay.ts` | Charging someone twice |
@@ -184,7 +185,12 @@ Three failure paths are wired, because they prove different things:
   [`app/api/checkout/failed/route.ts`](app/api/checkout/failed/route.ts).
 - **The checkout will not open.** Razorpay reports this through a browser alert,
   which a page can neither style nor answer, and which used to leave the button
-  stuck on "Opening checkout…". It is now caught and answered in the page.
+  stuck on "Opening checkout…". It is now caught and answered in the page, and
+  the underlying cause is fixed: an open order older than the double-click
+  window is read back from Razorpay before it is reused, and set aside if it is
+  no longer openable. Previously any row still marked `created` was handed to
+  Checkout.js forever, so an order that died on Razorpay's side locked that
+  account out of checkout permanently with a 400 and no way to recover.
 
 A signature that does not verify is also treated as a failed payment rather than
 being swallowed — [`app/api/checkout/verify/route.ts`](app/api/checkout/verify/route.ts).

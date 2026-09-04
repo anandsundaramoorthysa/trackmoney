@@ -66,6 +66,38 @@ type RazorpayOrder = { id: string; amount: number; currency: string };
  * The request a judge is being asked to trust is then readable in full, right
  * here, instead of behind a vendor wrapper — and it drops a dependency.
  */
+/**
+ * How long an unpaid order is reused without asking Razorpay about it.
+ *
+ * Short on purpose. The rule this window serves is "one open order per user",
+ * which exists so a double-click, a retry loop or an agent calling the tool
+ * twice cannot stack up orders — and all of those happen within seconds. Beyond
+ * that, reuse is no longer protecting anybody from anything, and the older the
+ * row is the likelier it is that the order behind it is no longer openable.
+ */
+const REUSE_WITHOUT_ASKING_MS = 60_000;
+
+/**
+ * Read an order back from Razorpay.
+ *
+ * Returns the order's status, or null when Razorpay will not serve it at all —
+ * which it answers with a 400, the same 400 Checkout.js reports as "Error in
+ * opening checkout" when handed that id.
+ */
+async function fetchOrderStatus(orderId: string): Promise<string | null> {
+  const { keyId, keySecret } = razorpayCredentials();
+  const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+
+  const response = await fetch(`${razorpayApiBase()}/v1/orders/${orderId}`, {
+    headers: { Authorization: `Basic ${auth}` },
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  if (!response.ok) return null;
+  const order = (await response.json()) as { status?: string };
+  return typeof order.status === "string" ? order.status : null;
+}
+
 async function postOrder(body: Record<string, unknown>): Promise<RazorpayOrder> {
   const { keyId, keySecret } = razorpayCredentials();
   const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
@@ -165,7 +197,75 @@ export async function createProUpgradeOrder(
     .where(and(eq(payments.userId, user.id), eq(payments.status, "created")))
     .limit(1);
 
+  /**
+   * An open row is not the same as an open order.
+   *
+   * This reused any row still marked "created", forever, without ever asking
+   * Razorpay whether the order behind it could still be opened. When an order
+   * stops being openable — settled on a tab whose result never reached us, or
+   * gone stale — that dead id was handed to Checkout.js on every subsequent
+   * attempt, the preferences call answered 400, and the account could never
+   * reach checkout again. Nothing aged the row out and nothing reconciled it,
+   * so it could not recover on its own.
+   *
+   * Now a row older than the double-click window is checked against Razorpay
+   * before it is trusted, and a fresh order is created when the old one is no
+   * longer usable. The rule itself is unchanged: still one open order per user,
+   * still enforced by the partial unique index.
+   */
+  let reusable: typeof existing | null = existing ?? null;
+
   if (existing) {
+    const ageMs = Date.now() - existing.createdAt.getTime();
+
+    if (ageMs > REUSE_WITHOUT_ASKING_MS) {
+      const live = await fetchOrderStatus(existing.razorpayOrderId).catch(
+        () => null,
+      );
+
+      /**
+       * "paid" is the case that loses money silently: somebody completed the
+       * payment somewhere we never heard about. Marking it abandoned would be
+       * wrong, and reusing it gives the dead end. It is recorded as the
+       * unverified settlement it is, and the plan is deliberately NOT changed
+       * — a plan only ever moves on a signature this server has checked.
+       */
+      const stillOpen = live === "created" || live === "attempted";
+
+      if (!stillOpen) {
+        await db
+          .update(payments)
+          .set({
+            status: "abandoned",
+            failureReason:
+              live === "paid"
+                ? "Settled at Razorpay without a verified signature reaching this server. Not counted as a payment."
+                : `No longer open at Razorpay${live ? ` (${live})` : ""}, so a fresh order was created.`,
+          })
+          .where(eq(payments.id, existing.id));
+
+        await logAgentEvent({
+          userId: user.id,
+          conversationId: options.conversationId ?? null,
+          type: "tool_refused",
+          explanation: `The open order ${existing.razorpayOrderId} was no longer usable at Razorpay${live ? ` (${live})` : " (not retrievable)"}, so it was set aside and a new one created.`,
+          meta: {
+            rule: "stale_order_abandoned",
+            orderId: existing.razorpayOrderId,
+            razorpayStatus: live,
+            ageSeconds: Math.round(ageMs / 1000),
+            moneyMoved: false,
+            enforcedIn: "lib/razorpay.ts",
+          },
+        });
+
+        reusable = null;
+      }
+    }
+  }
+
+  if (reusable) {
+    const existing = reusable;
     await logAgentEvent({
       userId: user.id,
       conversationId: options.conversationId ?? null,
